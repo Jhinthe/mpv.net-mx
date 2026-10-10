@@ -44,12 +44,15 @@ public partial class MainForm : Form
     bool _wasMaximized;
     bool _maxSizeSet;
     bool _isCursorVisible = true;
+    MxGestureController? _mxGesture;
 
     public MainForm()
     {
         InitializeComponent();
 
         UpdateDarkMode();
+
+        _mxGesture = new MxGestureController(this, () => MpvWindowHandle);
 
         try
         {
@@ -997,19 +1000,40 @@ public partial class MainForm : Form
             case 0x0104: // WM_SYSKEYDOWN
             case 0x0105: // WM_SYSKEYUP
             case 0x0201: // WM_LBUTTONDOWN
+                {
+                    Point pos = PointToClient(Cursor.Position);
+                    _mxGesture?.HandleMouseDown(pos);
+                    goto case 0x0204;
+                }
             case 0x0202: // WM_LBUTTONUP
+                {
+                    Point pos = PointToClient(Cursor.Position);
+                    if (_mxGesture != null && _mxGesture.HandleMouseUp(pos))
+                    {
+                        m.Result = IntPtr.Zero;
+                        return;
+                    }
+                    goto case 0x0204;
+                }
+            case 0x020a: // WM_MOUSEWHEEL
+                {
+                    if (_mxGesture != null && _mxGesture.HandleMouseWheel(m.WParam, m.LParam))
+                    {
+                        m.Result = IntPtr.Zero;
+                        return;
+                    }
+                    goto case 0x0204;
+                }
             case 0x0204: // WM_RBUTTONDOWN
             case 0x0205: // WM_RBUTTONUP
             case 0x0206: // WM_RBUTTONDBLCLK
             case 0x0207: // WM_MBUTTONDOWN
             case 0x0208: // WM_MBUTTONUP
             case 0x0209: // WM_MBUTTONDBLCLK
-            case 0x020a: // WM_MOUSEWHEEL
             case 0x020b: // WM_XBUTTONDOWN
             case 0x020c: // WM_XBUTTONUP
             case 0x020e: // WM_MOUSEHWHEEL
-            case 0x0280: // WM_IME_REPORT
-            case 0x0281: // WM_IME_SETCONTEXT
+                        case 0x0281: // WM_IME_SETCONTEXT
             case 0x0282: // WM_IME_NOTIFY
             case 0x0283: // WM_IME_CONTROL
             case 0x0284: // WM_IME_COMPOSITIONFULL
@@ -1063,18 +1087,31 @@ public partial class MainForm : Form
                 GlobalHotkey.Execute(m.WParam.ToInt32());
                 break;
             case 0x200: // WM_MOUSEMOVE
-                if (Environment.TickCount - _lastCycleFullscreen > 500)
                 {
                     Point pos = PointToClient(Cursor.Position);
-                    Player.Command($"mouse {pos.X} {pos.Y}");
-                }
+                    if (_mxGesture != null && _mxGesture.HandleMouseMove(pos))
+                    {
+                        m.Result = IntPtr.Zero;
+                        return;
+                    }
 
-                if (IsCursorPosDifferent(_lastCursorPosition))
-                    ShowCursor();
+                    if (Environment.TickCount - _lastCycleFullscreen > 500)
+                    {
+                        Player.Command($"mouse {pos.X} {pos.Y}");
+                    }
+
+                    if (IsCursorPosDifferent(_lastCursorPosition))
+                        ShowCursor();
+                }
                 break;
             case 0x203: // WM_LBUTTONDBLCLK
                 {
                     Point pos = PointToClient(Cursor.Position);
+                    if (_mxGesture != null && _mxGesture.HandleDoubleClick(pos))
+                    {
+                        m.Result = IntPtr.Zero;
+                        return;
+                    }
                     Player.Command($"mouse {pos.X} {pos.Y} 0 double");
                 }
                 break;
