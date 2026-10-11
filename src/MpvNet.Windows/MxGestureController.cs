@@ -59,6 +59,44 @@ public class MxGestureController
         Point screenPt = new Point((short)(lParam.ToInt64() & 0xFFFF), (short)((lParam.ToInt64() >> 16) & 0xFFFF));
         Point clientPt = _form.PointToClient(screenPt);
 
+        // 1. 快捷修饰键手势（MX 级字幕神控）
+        if ((Control.ModifierKeys & Keys.Alt) == Keys.Alt)
+        {
+            // Alt + 滚轮：无级调整字幕字号大小 (0.4 ~ 3.0)
+            double scale = Player.GetPropertyDouble("sub-scale", false);
+            if (double.IsNaN(scale) || scale <= 0) scale = 1.0;
+            double step = delta > 0 ? 0.05 : -0.05;
+            double newScale = Math.Clamp(Math.Round(scale + step, 2), 0.4, 3.0);
+            Player.SetPropertyDouble("sub-scale", newScale);
+            ShowOsd($"🔤  字幕字号: {Math.Round(newScale * 100)}%");
+            return true;
+        }
+
+        if ((Control.ModifierKeys & Keys.Control) == Keys.Control)
+        {
+            // Ctrl + 滚轮：垂直移动字幕位置 (0 ~ 100)
+            int pos = Player.GetPropertyInt("sub-pos");
+            if (pos <= 0) pos = 100;
+            int step = delta > 0 ? -2 : 2; // 向上滚字幕往上移
+            int newPos = Math.Clamp(pos + step, 0, 100);
+            Player.SetPropertyInt("sub-pos", newPos);
+            ShowOsd($"↕  字幕垂直位置: {newPos}%");
+            return true;
+        }
+
+        if ((Control.ModifierKeys & Keys.Shift) == Keys.Shift)
+        {
+            // Shift + 滚轮：字幕时间轴毫秒级对齐校准 (-60.0s ~ 60.0s)
+            double delay = Player.GetPropertyDouble("sub-delay", false);
+            if (double.IsNaN(delay)) delay = 0.0;
+            double step = delta > 0 ? 0.1 : -0.1;
+            double newDelay = Math.Round(delay + step, 2);
+            Player.SetPropertyDouble("sub-delay", newDelay);
+            string sign = newDelay > 0 ? "+" : "";
+            ShowOsd($"⏱  字幕时间轴校准: {sign}{newDelay:F1}s");
+            return true;
+        }
+
         double widthRatio = (double)clientPt.X / Math.Max(1, _form.ClientSize.Width);
 
         if (widthRatio < 0.35)
