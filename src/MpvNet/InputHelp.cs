@@ -25,6 +25,8 @@ public static class InputHelp
         Add(b, new (_("Playback"), _("Play/Pause"), "script-message-to mpvnet play-pause", "Space"));
                 Add(b, new (_("Playback"), _("Stop"), "stop", "Ctrl+s"));
 
+                Add(b, new (_("MX Enhancement"), _("Local Media Library..."), "script-message-to mpvnet mx-show-media-library", "Ctrl+l"));
+        Add(b, new (_("MX Enhancement"), "-"));
         Add(b, new (_("MX Enhancement"), _("Night Mode & Vocal Boost"), "script-message-to mpvnet mx-toggle-night-mode", "n"));
         Add(b, new (_("MX Enhancement"), _("Adaptive Sharpen"), "script-message-to mpvnet mx-toggle-sharpen", "u"));
         Add(b, new (_("MX Enhancement"), _("Vibrant Color Boost"), "script-message-to mpvnet mx-toggle-vibrant", "i"));

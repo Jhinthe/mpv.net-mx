@@ -1,4 +1,5 @@
-﻿using MpvNet.Windows;
+﻿using MpvNet.Windows.MediaLibrary;
+using MpvNet.Windows;
 
 using System.Text;
 using System.Text.Json;
@@ -31,7 +32,8 @@ public class GuiCommand
 
     public Dictionary<string, Action<IList<string>>> Commands => _commands ??= new()
     {
-                ["mx-toggle-night-mode"] = args => MxEnhancementManager.ToggleNightMode(),
+                        ["mx-show-media-library"] = args => ShowDialog(typeof(MediaLibraryWindow)),
+        ["mx-toggle-night-mode"] = args => MxEnhancementManager.ToggleNightMode(),
         ["mx-toggle-sharpen"] = args => MxEnhancementManager.ToggleSharpen(),
         ["mx-toggle-vibrant"] = args => MxEnhancementManager.ToggleVibrantColor(),
         ["mx-toggle-volume-boost"] = args => MxEnhancementManager.ToggleVolumeBoost(),

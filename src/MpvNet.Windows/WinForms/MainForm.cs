@@ -1304,6 +1304,20 @@ public partial class MainForm : Form
     {
         if (Player.TaskbarProgress && _taskbar != null)
             _taskbar.SetValue(Player.GetPropertyDouble("time-pos", false), Player.Duration.TotalSeconds);
+        try
+        {
+            string currentFile = Player.Path;
+            if (!string.IsNullOrEmpty(currentFile) && File.Exists(currentFile))
+            {
+                double pos = Player.GetPropertyDouble("time-pos", false);
+                double dur = Player.Duration.TotalSeconds;
+                if (pos > 0 && dur > 0)
+                {
+                    MediaLibrary.MxMediaLibraryEngine.Instance.UpdatePlaybackProgress(currentFile, pos, dur);
+                }
+            }
+        }
+        catch {}
     }
 
     void PropChangeOnTop(bool value) => BeginInvoke(() => TopMost = value);
