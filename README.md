@@ -8,6 +8,36 @@
 
 mpv.net is a media player for Windows with a modern GUI.
 
+
+---
+
+## ⚡ MX Enhancement Edition
+
+This enhanced branch incorporates mobile-grade intuitive gestures and pro-tier audiovisual processing into mpv.net, crafted to deliver an unprecedented viewing experience on Windows.
+
+### ✨ Key Features
+- **MX-Style Gestures**:
+  - Left 35% vertical drag/scroll: Smooth brightness adjustment (`-100% ~ 100%`)
+  - Right 35% vertical drag/scroll: Smooth volume control with super-boost (`0% ~ 130%`)
+  - Horizontal drag & middle scroll: Timeline seeking with dynamic interval calculation
+  - Quick double-tap zones: Left -10s, Right +10s, Center Play/Pause toggle
+- **Subtitles Wheel Control**:
+  - `Alt + Wheel`: Stepless subtitle scaling (`40% ~ 300%`)
+  - `Ctrl + Wheel`: Vertical position adjustment (`0% ~ 100%`)
+  - `Shift + Wheel`: Millisecond audio-subtitle sync delay calibration
+- **Audiovisual Enhancement Suite**:
+  - **Night Mode / Vocal Boost (`n`)**: High-fidelity dynamic range compression, attenuating deafening sound effects while boosting whisper-quiet dialog.
+  - **Adaptive Sharpening (`u`)**: Real-time edge and texture refinement for 720p/1080p videos.
+  - **Vibrant Color (`i`)**: Contrast and saturation compensation for washed-out sources.
+  - **200% Volume Super Boost (`b`)**: Unlock hardware limits for quiet laptop speakers.
+
+### 👥 Core Contributors
+- **[@Jhinthe](https://github.com/Jhinthe)** - Project lead, architecture design & feature development
+- **Co-authored with Chatbox**
+
+---
+
+
 The player is based on the popular [mpv](https://mpv.io) media player.
 mpv.net is designed to be mpv compatible, almost all mpv features are available,
 this means the official [mpv manual](https://mpv.io/manual/master/) applies to mpv.net,
