@@ -23,7 +23,15 @@ public static class InputHelp
         Add(b, new (_("File"), _("Exit"), "quit", "Esc"));
 
         Add(b, new (_("Playback"), _("Play/Pause"), "script-message-to mpvnet play-pause", "Space"));
-        Add(b, new (_("Playback"), _("Stop"), "stop", "Ctrl+s"));
+                Add(b, new (_("Playback"), _("Stop"), "stop", "Ctrl+s"));
+
+        Add(b, new (_("MX Enhancement"), _("Night Mode & Vocal Boost"), "script-message-to mpvnet mx-toggle-night-mode", "n"));
+        Add(b, new (_("MX Enhancement"), _("Adaptive Sharpen"), "script-message-to mpvnet mx-toggle-sharpen", "u"));
+        Add(b, new (_("MX Enhancement"), _("Vibrant Color Boost"), "script-message-to mpvnet mx-toggle-vibrant", "i"));
+        Add(b, new (_("MX Enhancement"), _("200% Volume Boost"), "script-message-to mpvnet mx-toggle-volume-boost", "b"));
+        Add(b, new (_("MX Enhancement"), _("Anime Enhancement"), "script-message-to mpvnet mx-toggle-anime"));
+        Add(b, new (_("MX Enhancement"), "-"));
+        Add(b, new (_("MX Enhancement"), _("Reset All Enhancements"), "script-message-to mpvnet mx-reset-enhancements", "Ctrl+0"));
 
         Add(b, new (_("Navigate"), _("Previous File"), "playlist-prev", "F11"));
         Add(b, new (_("Navigate"), _("Next File"), "playlist-next", "F12"));

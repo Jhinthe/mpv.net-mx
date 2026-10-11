@@ -1,4 +1,5 @@
-﻿
+﻿using MpvNet.Windows;
+
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -30,6 +31,12 @@ public class GuiCommand
 
     public Dictionary<string, Action<IList<string>>> Commands => _commands ??= new()
     {
+                ["mx-toggle-night-mode"] = args => MxEnhancementManager.ToggleNightMode(),
+        ["mx-toggle-sharpen"] = args => MxEnhancementManager.ToggleSharpen(),
+        ["mx-toggle-vibrant"] = args => MxEnhancementManager.ToggleVibrantColor(),
+        ["mx-toggle-volume-boost"] = args => MxEnhancementManager.ToggleVolumeBoost(),
+        ["mx-toggle-anime"] = args => MxEnhancementManager.ToggleAnimeMode(),
+        ["mx-reset-enhancements"] = args => MxEnhancementManager.ResetAll(),
         ["add-to-path"] = args => AddToPath(),
         ["edit-conf-file"] = EditCongFile,
         ["load-audio"] = LoadAudio,
