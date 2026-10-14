@@ -32,7 +32,7 @@ public class GuiCommand
 
     public Dictionary<string, Action<IList<string>>> Commands => _commands ??= new()
     {
-                        ["mx-show-media-library"] = args => ShowDialog(typeof(MediaLibraryWindow)),
+                        ["mx-show-media-library"] = args => { if (MainForm.Instance != null) MainForm.Instance.ShowMediaLibrary(); else ShowDialog(typeof(MediaLibraryWindow)); },
         ["mx-toggle-night-mode"] = args => MxEnhancementManager.ToggleNightMode(),
         ["mx-toggle-sharpen"] = args => MxEnhancementManager.ToggleSharpen(),
         ["mx-toggle-vibrant"] = args => MxEnhancementManager.ToggleVibrantColor(),

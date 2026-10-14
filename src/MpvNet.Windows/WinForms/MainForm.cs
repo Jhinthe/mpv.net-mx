@@ -44,7 +44,9 @@ public partial class MainForm : Form
     bool _wasMaximized;
     bool _maxSizeSet;
     bool _isCursorVisible = true;
-    MxGestureController? _mxGesture;
+        MxGestureController? _mxGesture;
+    private System.Windows.Forms.Integration.ElementHost? _mediaLibraryHost;
+    private MediaLibrary.MediaLibraryControl? _mediaLibraryControl;
 
     public MainForm()
     {
@@ -1438,9 +1440,79 @@ public partial class MainForm : Form
         MessageBoxEx.ButtonBackground  = Theme.Current?.GetBrush("highlight");
         InitAndBuildContextMenu();
         Cursor.Position = new Point(Cursor.Position.X + 1, Cursor.Position.Y);
-        GlobalHotkey.RegisterGlobalHotkeys(Handle);
+                GlobalHotkey.RegisterGlobalHotkeys(Handle);
+        InitMediaLibraryHost();
         StrongReferenceMessenger.Default.Send(new MainWindowIsLoadedMessage());
         WasShown = true;
+    }
+    public void InitMediaLibraryHost()
+    {
+        try
+        {
+            _mediaLibraryControl = new MediaLibrary.MediaLibraryControl();
+            _mediaLibraryControl.RequestPlay += MediaLibrary_RequestPlay;
+            _mediaLibraryControl.RequestClose += MediaLibrary_RequestClose;
+
+            _mediaLibraryHost = new System.Windows.Forms.Integration.ElementHost
+            {
+                Dock = DockStyle.Fill,
+                Child = _mediaLibraryControl,
+                Visible = false
+            };
+
+            Controls.Add(_mediaLibraryHost);
+            _mediaLibraryHost.BringToFront();
+
+            // 如果启动时未打开特定视频文件（即单纯双击播放器图标进入，处于空闲模式），直接在同一窗口中先显示媒体库！
+            if (string.IsNullOrEmpty(Player.Path) && Player.PlaylistPos < 0)
+            {
+                ShowMediaLibrary();
+            }
+        }
+        catch {}
+    }
+
+    public void ShowMediaLibrary()
+    {
+        BeginInvoke(() => {
+            if (_mediaLibraryHost != null)
+            {
+                bool hasMedia = !string.IsNullOrEmpty(Player.Path);
+                _mediaLibraryControl?.SetPlayingState(hasMedia);
+                _mediaLibraryControl?.RefreshViews();
+                _mediaLibraryHost.Visible = true;
+                _mediaLibraryHost.BringToFront();
+                _mediaLibraryHost.Focus();
+            }
+        });
+    }
+
+    public void HideMediaLibrary()
+    {
+        BeginInvoke(() => {
+            if (_mediaLibraryHost != null && _mediaLibraryHost.Visible)
+            {
+                _mediaLibraryHost.Visible = false;
+                Focus();
+            }
+        });
+    }
+
+    private void MediaLibrary_RequestPlay(string filePath, double lastPosition)
+    {
+        BeginInvoke(() => {
+            HideMediaLibrary();
+            Player.CommandV("loadfile", filePath);
+            if (lastPosition > 5.0 && lastPosition < (Player.Duration.TotalSeconds - 10.0))
+            {
+                Player.CommandV("seek", lastPosition.ToString(CultureInfo.InvariantCulture), "absolute", "exact");
+            }
+        });
+    }
+
+    private void MediaLibrary_RequestClose()
+    {
+        HideMediaLibrary();
     }
 
     void ContextMenu_Closed(object sender, System.Windows.RoutedEventArgs e) => MenuAutoResetEvent.Set();
