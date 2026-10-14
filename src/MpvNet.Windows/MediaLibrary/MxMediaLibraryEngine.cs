@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -63,6 +63,18 @@ public class MxMediaLibraryEngine
         ".mp3", ".flac", ".wav", ".m4a", ".ogg", ".opus", ".aac", ".wma", ".mka"
     };
 
+    // 系统与缓存黑名单目录（避免递归卡死或扫出垃圾）
+    private static readonly HashSet<string> SkipDirNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "System Volume Information", "$Recycle.Bin", "$RECYCLE.BIN", "Windows", "Program Files",
+        "Program Files (x86)", "ProgramData", "AppData", "Recovery", "Config.Msi", "PerfLogs",
+        "node_modules", ".git", ".vs", "bin", "obj", "temp", "cache"
+    };
+
+    // 最小文件大小过滤（默认 2MB，过滤极短无意义的系统音效或小碎片）
+    private const long MinVideoBytes = 2 * 1024 * 1024;
+    private const long MinAudioBytes = 500 * 1024;
+
     public ObservableCollection<MediaItem> AllItems { get; } = [];
     public ObservableCollection<FolderItem> Folders { get; } = [];
 
@@ -88,9 +100,6 @@ public class MxMediaLibraryEngine
         LoadCache();
     }
 
-    /// <summary>
-    /// 读取本地持久化缓存
-    /// </summary>
     public void LoadCache()
     {
         try
@@ -113,9 +122,6 @@ public class MxMediaLibraryEngine
         catch {}
     }
 
-    /// <summary>
-    /// 保存持久化缓存
-    /// </summary>
     public void SaveCache()
     {
         try
@@ -127,8 +133,19 @@ public class MxMediaLibraryEngine
         catch {}
     }
 
+    public void RemoveItem(string filePath)
+    {
+        var target = AllItems.FirstOrDefault(it => string.Equals(it.FilePath, filePath, StringComparison.OrdinalIgnoreCase));
+        if (target != null)
+        {
+            AllItems.Remove(target);
+            RebuildFolders();
+            SaveCache();
+        }
+    }
+
     /// <summary>
-    /// 触发异步全量或增量扫描
+    /// 扫描全盘或指定根目录
     /// </summary>
     public async Task ScanAsync(IEnumerable<string>? customRoots = null)
     {
@@ -149,16 +166,7 @@ public class MxMediaLibraryEngine
                 Parallel.ForEach(roots, root =>
                 {
                     if (!Directory.Exists(root)) return;
-                    try
-                    {
-                        var files = Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories)
-                            .Where(f => VideoExtensions.Contains(Path.GetExtension(f)) ||
-                                        AudioExtensions.Contains(Path.GetExtension(f)));
-
-                        foreach (var f in files)
-                            foundFiles.Add(f);
-                    }
-                    catch {}
+                    ScanDirectoryRecursive(root, foundFiles);
                 });
 
                 int total = foundFiles.Count;
@@ -184,7 +192,7 @@ public class MxMediaLibraryEngine
                     catch {}
 
                     int c = System.Threading.Interlocked.Increment(ref current);
-                    if (c % 10 == 0 || c == total)
+                    if (c % 15 == 0 || c == total)
                         ScanProgress?.Invoke(c);
                 });
 
@@ -209,21 +217,111 @@ public class MxMediaLibraryEngine
         });
     }
 
+    /// <summary>
+    /// 手动添加单个文件夹或文件（支持拖拽）
+    /// </summary>
+    public async Task AddPathsAsync(IEnumerable<string> paths)
+    {
+        if (paths == null) return;
+        var foundFiles = new List<string>();
+
+        await Task.Run(() =>
+        {
+            foreach (var p in paths)
+            {
+                if (File.Exists(p))
+                {
+                    string ext = Path.GetExtension(p);
+                    if (VideoExtensions.Contains(ext) || AudioExtensions.Contains(ext))
+                        foundFiles.Add(p);
+                }
+                else if (Directory.Exists(p))
+                {
+                    var bag = new ConcurrentBag<string>();
+                    ScanDirectoryRecursive(p, bag);
+                    foundFiles.AddRange(bag);
+                }
+            }
+
+            var existingMap = AllItems.ToDictionary(it => it.FilePath, StringComparer.OrdinalIgnoreCase);
+            var toAdd = new List<MediaItem>();
+
+            foreach (var file in foundFiles)
+            {
+                if (!existingMap.ContainsKey(file))
+                {
+                    var item = ParseMediaFile(file);
+                    if (item != null)
+                        toAdd.Add(item);
+                }
+            }
+
+            if (toAdd.Count > 0)
+            {
+                System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                {
+                    foreach (var it in toAdd)
+                        AllItems.Insert(0, it);
+
+                    RebuildFolders();
+                });
+                SaveCache();
+            }
+        });
+    }
+
+    private void ScanDirectoryRecursive(string dir, ConcurrentBag<string> bag)
+    {
+        try
+        {
+            var di = new DirectoryInfo(dir);
+            if (SkipDirNames.Contains(di.Name) || (di.Attributes & FileAttributes.Hidden) != 0)
+                return;
+
+            foreach (var fi in di.EnumerateFiles())
+            {
+                string ext = fi.Extension;
+                if (VideoExtensions.Contains(ext))
+                {
+                    if (fi.Length >= MinVideoBytes)
+                        bag.Add(fi.FullName);
+                }
+                else if (AudioExtensions.Contains(ext))
+                {
+                    if (fi.Length >= MinAudioBytes)
+                        bag.Add(fi.FullName);
+                }
+            }
+
+            foreach (var subDir in di.EnumerateDirectories())
+            {
+                if (!SkipDirNames.Contains(subDir.Name) && (subDir.Attributes & FileAttributes.Hidden) == 0)
+                {
+                    ScanDirectoryRecursive(subDir.FullName, bag);
+                }
+            }
+        }
+        catch {}
+    }
+
     private List<string> GetDefaultSearchRoots()
     {
         var roots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        // 系统默认媒体库目录
+        // 系统媒体文件夹
         roots.Add(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos));
         roots.Add(Environment.GetFolderPath(Environment.SpecialFolder.MyMusic));
 
-        // 默认扫描主要数据盘（L:\, J:\, D:\）
+        // 本地数据盘根目录（L:\, J:\, D:\ 等，跳过 C 盘系统盘深度扫描，防止卡死）
         foreach (var drive in DriveInfo.GetDrives())
         {
             if (drive.IsReady && (drive.DriveType == DriveType.Fixed || drive.DriveType == DriveType.Removable))
             {
                 string root = drive.RootDirectory.FullName;
-                roots.Add(root);
+                if (!string.Equals(root, "C:\\", StringComparison.OrdinalIgnoreCase))
+                {
+                    roots.Add(root);
+                }
             }
         }
 
@@ -253,7 +351,6 @@ public class MxMediaLibraryEngine
                 LastModified = fi.LastWriteTime
             };
 
-            // 提取或生成视频缩略图
             if (isVideo)
             {
                 string thumbPath = GetOrCreateThumbnail(fi.FullName);
@@ -268,7 +365,7 @@ public class MxMediaLibraryEngine
         }
     }
 
-    private void RebuildFolders()
+    public void RebuildFolders()
     {
         Folders.Clear();
         var groups = AllItems.GroupBy(it => it.DirectoryPath, StringComparer.OrdinalIgnoreCase);
@@ -286,15 +383,12 @@ public class MxMediaLibraryEngine
                 Items = g.ToList()
             };
             if (string.IsNullOrEmpty(folder.FolderName))
-                folder.FolderName = g.Key; // 盘符根目录
+                folder.FolderName = g.Key;
 
             Folders.Add(folder);
         }
     }
 
-    /// <summary>
-    /// 更新播放进度（续播记忆）
-    /// </summary>
     public void UpdatePlaybackProgress(string filePath, double position, double duration)
     {
         if (duration <= 0) return;
@@ -309,9 +403,8 @@ public class MxMediaLibraryEngine
         }
     }
 
-    /// <summary>
-    /// Windows 原生 Shell COM 快速抽取视频缩略图
-    /// </summary>
+    public long GetTotalSizeBytes() => AllItems.Sum(it => it.FileSizeBytes);
+
     private string GetOrCreateThumbnail(string videoPath)
     {
         try
@@ -343,9 +436,9 @@ public class MxMediaLibraryEngine
 
     public static string FormatFileSize(long bytes)
     {
-        if (bytes >= 1024 * 1024 * 1024)
+        if (bytes >= 1024L * 1024 * 1024)
             return $"{(bytes / (1024.0 * 1024 * 1024)):F1} GB";
-        if (bytes >= 1024 * 1024)
+        if (bytes >= 1024L * 1024)
             return $"{(bytes / (1024.0 * 1024)):F1} MB";
         return $"{(bytes / 1024.0):F0} KB";
     }
@@ -360,12 +453,10 @@ public class MxMediaLibraryEngine
 }
 
 /// <summary>
-/// Windows 原生 IShellItemImageFactory COM 缩略图极速提供器
+/// Windows 原生 IShellItemImageFactory COM 缩略图极速提取
 /// </summary>
 internal static class WindowsThumbnailProvider
 {
-    private const string IShellItem2Guid = "7E9EA090-3257-4761-9E77-05C0207BBEC7";
-
     [ComImport]
     [Guid("bcc18b79-ba16-442f-80c4-8a59c30c463b")]
     [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
