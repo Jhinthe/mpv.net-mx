@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -72,8 +72,8 @@ public class MxMediaLibraryEngine
     };
 
     // 最小文件大小过滤（默认 2MB，过滤极短无意义的系统音效或小碎片）
-    private const long MinVideoBytes = 2 * 1024 * 1024;
-    private const long MinAudioBytes = 500 * 1024;
+    private const long MinVideoBytes = 300 * 1024;
+    private const long MinAudioBytes = 100 * 1024;
 
     public ObservableCollection<MediaItem> AllItems { get; } = [];
     public ObservableCollection<FolderItem> Folders { get; } = [];

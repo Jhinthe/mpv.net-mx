@@ -1441,7 +1441,14 @@ public partial class MainForm : Form
         InitAndBuildContextMenu();
         Cursor.Position = new Point(Cursor.Position.X + 1, Cursor.Position.Y);
                 GlobalHotkey.RegisterGlobalHotkeys(Handle);
-        InitMediaLibraryHost();
+                // 空闲首屏启动：若无文件正在播放，自动展示 MX 本地媒体库！
+        if (string.IsNullOrEmpty(Player.Path))
+        {
+            this.BeginInvoke(new Action(() =>
+            {
+                MediaLibrary.MediaLibraryWindow.ShowInstance();
+            }));
+        }
         StrongReferenceMessenger.Default.Send(new MainWindowIsLoadedMessage());
         WasShown = true;
     }

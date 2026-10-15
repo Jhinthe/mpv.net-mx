@@ -13,6 +13,40 @@ namespace MpvNet.Windows.MediaLibrary;
 
 public partial class MediaLibraryWindow : Window
 {
+    private static MediaLibraryWindow? _instance;
+    public static MediaLibraryWindow Instance => _instance ??= new MediaLibraryWindow();
+
+    public static void ShowInstance()
+    {
+        if (System.Windows.Application.Current != null)
+        {
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            {
+                if (_instance == null || !_instance.IsLoaded)
+                    _instance = new MediaLibraryWindow();
+                
+                _instance.Show();
+                _instance.WindowState = WindowState.Normal;
+                _instance.Activate();
+            });
+        }
+        else
+        {
+            // 如果 WPF Application 尚未启动，在新线程启动 STA
+            var thread = new System.Threading.Thread(() =>
+            {
+                if (System.Windows.Application.Current == null)
+                    new System.Windows.Application();
+                
+                _instance = new MediaLibraryWindow();
+                _instance.Show();
+                System.Windows.Threading.Dispatcher.Run();
+            });
+            thread.SetApartmentState(System.Threading.ApartmentState.STA);
+            thread.IsBackground = true;
+            thread.Start();
+        }
+    }
     private readonly MxMediaLibraryEngine _engine = MxMediaLibraryEngine.Instance;
     private string _currentFilter = "";
     private string? _activeFolderPath = null; // 当前正在深入浏览的文件夹路径
@@ -44,10 +78,9 @@ public partial class MediaLibraryWindow : Window
 
     private void MediaLibraryWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
-        _engine.ScanStarted -= OnScanStarted;
-        _engine.ScanProgress -= OnScanProgress;
-        _engine.ScanCompleted -= OnScanCompleted;
-        MxI18n.LanguageChanged -= UpdateI18nTexts;
+        e.Cancel = true; this.Hide(); return;
+        e.Cancel = true;
+        this.Hide();
     }
 
     private void UpdateI18nTexts()
