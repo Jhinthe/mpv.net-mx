@@ -102,14 +102,13 @@ public partial class MediaLibraryWindow : Window
 
     private void MediaLibraryWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
-        e.Cancel = true; this.Hide(); return;
         e.Cancel = true;
         this.Hide();
     }
 
     private void UpdateI18nTexts()
     {
-        Dispatcher.Invoke(() =>
+        Action update = () =>
         {
             Title = MxI18n.T("AppTitle");
             TxtBrandTitle.Text = MxI18n.T("BrandTitle");
@@ -145,9 +144,12 @@ public partial class MediaLibraryWindow : Window
                     }
                 }
             }
+        };
 
-            UpdateViewHeading();
-        });
+        if (Dispatcher.CheckAccess())
+            update();
+        else
+            Dispatcher.Invoke(update);
     }
 
     private void UpdateViewHeading()
