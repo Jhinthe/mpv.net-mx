@@ -118,6 +118,7 @@ public class MxMediaLibraryEngine
                         AllItems.Add(it);
                 }
                 RebuildFolders();
+                if (items.Count != AllItems.Count) SaveCache();
             }
         }
         catch {}

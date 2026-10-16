@@ -1,4 +1,5 @@
-﻿using System;
+﻿using MpvNet.Windows.WinForms;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -16,36 +17,58 @@ public partial class MediaLibraryWindow : Window
     private static MediaLibraryWindow? _instance;
     public static MediaLibraryWindow Instance => _instance ??= new MediaLibraryWindow();
 
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
     public static void ShowInstance()
     {
-        if (System.Windows.Application.Current != null)
+        var app = System.Windows.Application.Current;
+        if (app != null && app.Dispatcher != null)
         {
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            if (app.Dispatcher.CheckAccess())
             {
-                if (_instance == null || !_instance.IsLoaded)
-                    _instance = new MediaLibraryWindow();
-                
-                _instance.Show();
-                _instance.WindowState = WindowState.Normal;
-                _instance.Activate();
-            });
+                EnsureAndShowWindow();
+            }
+            else
+            {
+                app.Dispatcher.BeginInvoke(new Action(EnsureAndShowWindow));
+            }
         }
         else
         {
-            // 如果 WPF Application 尚未启动，在新线程启动 STA
-            var thread = new System.Threading.Thread(() =>
-            {
-                if (System.Windows.Application.Current == null)
-                    new System.Windows.Application();
-                
-                _instance = new MediaLibraryWindow();
-                _instance.Show();
-                System.Windows.Threading.Dispatcher.Run();
-            });
-            thread.SetApartmentState(System.Threading.ApartmentState.STA);
-            thread.IsBackground = true;
-            thread.Start();
+            EnsureAndShowWindow();
         }
+    }
+
+    private static void EnsureAndShowWindow()
+    {
+        try
+        {
+            if (_instance == null || !_instance.IsLoaded)
+            {
+                _instance = new MediaLibraryWindow();
+            }
+
+            if (_instance.Visibility != Visibility.Visible)
+            {
+                _instance.Show();
+            }
+
+            if (_instance.WindowState == WindowState.Minimized)
+            {
+                _instance.WindowState = WindowState.Normal;
+            }
+
+            _instance.Activate();
+            _instance.Focus();
+
+            var helper = new System.Windows.Interop.WindowInteropHelper(_instance);
+            if (helper.Handle != IntPtr.Zero)
+            {
+                SetForegroundWindow(helper.Handle);
+            }
+        }
+        catch {}
     }
     private readonly MxMediaLibraryEngine _engine = MxMediaLibraryEngine.Instance;
     private string _currentFilter = "";
@@ -459,14 +482,36 @@ public partial class MediaLibraryWindow : Window
     {
         try
         {
-            Player.CommandV("loadfile", item.FilePath);
-
+            // 原生秒级续播：若大于5秒且未播完，直接作为起播参数传入，防止异步 seek 竞争丢失
             if (item.LastPosition > 5.0 && item.LastPosition < (item.DurationSeconds - 10.0))
             {
-                Player.CommandV("seek", item.LastPosition.ToString(System.Globalization.CultureInfo.InvariantCulture), "absolute", "exact");
+                string startArg = "start=" + item.LastPosition.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+                Player.CommandV("loadfile", item.FilePath, "replace", startArg);
+            }
+            else
+            {
+                Player.CommandV("loadfile", item.FilePath);
             }
 
-            Close();
+            this.Hide();
+
+            // 安全还原并提升底层播放器到前台
+            if (MainForm.Instance != null)
+            {
+                MainForm.Instance.BeginInvoke(new Action(() =>
+                {
+                    try
+                    {
+                        if (MainForm.Instance.WindowState == System.Windows.Forms.FormWindowState.Minimized)
+                        {
+                            MainForm.Instance.WindowState = System.Windows.Forms.FormWindowState.Normal;
+                        }
+                        MainForm.Instance.Activate();
+                        SetForegroundWindow(MainForm.Instance.Handle);
+                    }
+                    catch {}
+                }));
+            }
         }
         catch (Exception ex)
         {
