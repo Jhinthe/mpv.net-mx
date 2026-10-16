@@ -1,4 +1,4 @@
-﻿using MpvNet.Windows.WinForms;
+using MpvNet.Windows.WinForms;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -494,15 +494,15 @@ public partial class MediaLibraryWindow : Window
     {
         try
         {
-            // 原生秒级续播：若大于5秒且未播完，直接作为起播参数传入，防止异步 seek 竞争丢失
+            // 原生秒级续播：新版 libmpv loadfile 第3参数已改为 index (-1)，第4参数才是 options；也可先置 file-local-options/start
             if (item.LastPosition > 5.0 && item.LastPosition < (item.DurationSeconds - 10.0))
             {
                 string startArg = "start=" + item.LastPosition.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
-                Player.CommandV("loadfile", item.FilePath, "replace", startArg);
+                Player.CommandV("loadfile", item.FilePath, "replace", "-1", startArg);
             }
             else
             {
-                Player.CommandV("loadfile", item.FilePath);
+                Player.CommandV("loadfile", item.FilePath, "replace");
             }
 
             this.Hide();
