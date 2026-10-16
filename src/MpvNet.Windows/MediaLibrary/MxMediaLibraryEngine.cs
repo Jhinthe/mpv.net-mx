@@ -165,7 +165,8 @@ public class MxMediaLibraryEngine
 
                 var foundFiles = new ConcurrentBag<string>();
 
-                Parallel.ForEach(roots, root =>
+                            var rootOptions = new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount / 2, 2, 4) };
+            Parallel.ForEach(roots, rootOptions, root =>
                 {
                     if (!Directory.Exists(root)) return;
                     ScanDirectoryRecursive(root, foundFiles);
@@ -176,7 +177,8 @@ public class MxMediaLibraryEngine
                 var existingMap = AllItems.ToDictionary(it => it.FilePath, StringComparer.OrdinalIgnoreCase);
                 var newItems = new ConcurrentBag<MediaItem>();
 
-                Parallel.ForEach(foundFiles, file =>
+                                var parseOptions = new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount / 2, 2, 4) };
+                Parallel.ForEach(foundFiles, parseOptions, file =>
                 {
                     try
                     {
