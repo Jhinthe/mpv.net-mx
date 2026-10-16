@@ -86,7 +86,8 @@ public class MxMediaLibraryEngine
     public bool IsScanning { get; private set; }
     public event Action? ScanStarted;
     public event Action<int>? ScanProgress; // 已扫文件数
-    public event Action? ScanCompleted;
+        public event Action? ScanCompleted;
+    public event Action? ItemsChanged;
 
     private MxMediaLibraryEngine()
     {
@@ -231,7 +232,7 @@ public class MxMediaLibraryEngine
             {
                 if (File.Exists(p))
                 {
-                    string ext = Path.GetExtension(p);
+                    string ext = Path.GetExtension(p).ToLowerInvariant();
                     if (VideoExtensions.Contains(ext) || AudioExtensions.Contains(ext))
                         foundFiles.Add(p);
                 }
@@ -272,33 +273,66 @@ public class MxMediaLibraryEngine
 
     private void ScanDirectoryRecursive(string dir, ConcurrentBag<string> bag)
     {
+        DirectoryInfo di;
         try
         {
-            var di = new DirectoryInfo(dir);
-            if (SkipDirNames.Contains(di.Name) || (di.Attributes & FileAttributes.Hidden) != 0)
-                return;
+            di = new DirectoryInfo(dir);
+            if (!di.Exists) return;
+        }
+        catch { return; }
 
+        // 仅当不是驱动器根目录时才检查跳过名称和隐藏属性
+        bool isRoot = string.IsNullOrEmpty(di.Parent?.FullName);
+        if (!isRoot)
+        {
+            if (SkipDirNames.Contains(di.Name)) return;
+            try
+            {
+                if ((di.Attributes & FileAttributes.Hidden) != 0) return;
+            }
+            catch {}
+        }
+
+        // 1. 安全枚举文件
+        try
+        {
             foreach (var fi in di.EnumerateFiles())
             {
-                string ext = fi.Extension;
-                if (VideoExtensions.Contains(ext))
+                try
                 {
-                    if (fi.Length >= MinVideoBytes)
-                        bag.Add(fi.FullName);
+                    string ext = fi.Extension.ToLowerInvariant();
+                    if (VideoExtensions.Contains(ext))
+                    {
+                        if (fi.Length >= MinVideoBytes)
+                            bag.Add(fi.FullName);
+                    }
+                    else if (AudioExtensions.Contains(ext))
+                    {
+                        if (fi.Length >= MinAudioBytes)
+                            bag.Add(fi.FullName);
+                    }
                 }
-                else if (AudioExtensions.Contains(ext))
-                {
-                    if (fi.Length >= MinAudioBytes)
-                        bag.Add(fi.FullName);
-                }
+                catch {}
             }
+        }
+        catch {}
 
+        // 2. 独立安全递归子目录
+        try
+        {
             foreach (var subDir in di.EnumerateDirectories())
             {
-                if (!SkipDirNames.Contains(subDir.Name) && (subDir.Attributes & FileAttributes.Hidden) == 0)
+                try
                 {
-                    ScanDirectoryRecursive(subDir.FullName, bag);
+                    if (!SkipDirNames.Contains(subDir.Name))
+                    {
+                        if ((subDir.Attributes & FileAttributes.Hidden) == 0)
+                        {
+                            ScanDirectoryRecursive(subDir.FullName, bag);
+                        }
+                    }
                 }
+                catch {}
             }
         }
         catch {}

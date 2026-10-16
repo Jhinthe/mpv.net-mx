@@ -57,7 +57,8 @@ public partial class MediaLibraryWindow : Window
 
         _engine.ScanStarted += OnScanStarted;
         _engine.ScanProgress += OnScanProgress;
-        _engine.ScanCompleted += OnScanCompleted;
+                _engine.ScanCompleted += OnScanCompleted;
+        _engine.ItemsChanged += OnItemsChanged;
 
         MxI18n.LanguageChanged += UpdateI18nTexts;
 
@@ -164,6 +165,15 @@ public partial class MediaLibraryWindow : Window
         Dispatcher.Invoke(() =>
         {
             TxtStatus.Text = MxI18n.T("ScanningProgress", count);
+        });
+    }
+
+        private void OnItemsChanged()
+    {
+        Dispatcher.Invoke(() =>
+        {
+            RefreshViews();
+            UpdateViewHeading();
         });
     }
 
