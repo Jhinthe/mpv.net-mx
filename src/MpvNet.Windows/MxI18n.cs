@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 
@@ -87,7 +87,7 @@ public static class MxI18n
         try
         {
             string twoLetter = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName.ToLowerInvariant();
-            CurrentLanguage = twoLetter == "zh" ? MxLanguage.Zh : MxLanguage.En;
+            CurrentLanguage = MxLanguage.Zh;
         }
         catch
         {

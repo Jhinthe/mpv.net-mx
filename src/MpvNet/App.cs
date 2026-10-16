@@ -17,7 +17,7 @@ public class AppClass
     public string DarkTheme { get; set; } = "dark";
     public string LightTheme { get; set; } = "light";
     public string StartSize { get; set; } = "height-session";
-    public string Language { get; set; } = "system";
+    public string Language { get; set; } = "zh";
     public string CommandLine { get; set; } = Environment.CommandLine;
     public string MenuSyntax { get; set; } = "#menu:";
 

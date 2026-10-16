@@ -25,15 +25,15 @@ public static class InputHelp
         Add(b, new (_("Playback"), _("Play/Pause"), "script-message-to mpvnet play-pause", "Space"));
                 Add(b, new (_("Playback"), _("Stop"), "stop", "Ctrl+s"));
 
-                Add(b, new (_("MX Enhancement"), _("Local Media Library..."), "script-message-to mpvnet mx-show-media-library", "Ctrl+l"));
-        Add(b, new (_("MX Enhancement"), "-"));
-        Add(b, new (_("MX Enhancement"), _("Night Mode & Vocal Boost"), "script-message-to mpvnet mx-toggle-night-mode", "n"));
-        Add(b, new (_("MX Enhancement"), _("Adaptive Sharpen"), "script-message-to mpvnet mx-toggle-sharpen", "u"));
-        Add(b, new (_("MX Enhancement"), _("Vibrant Color Boost"), "script-message-to mpvnet mx-toggle-vibrant", "i"));
-        Add(b, new (_("MX Enhancement"), _("200% Volume Boost"), "script-message-to mpvnet mx-toggle-volume-boost", "b"));
-        Add(b, new (_("MX Enhancement"), _("Anime Enhancement"), "script-message-to mpvnet mx-toggle-anime"));
-        Add(b, new (_("MX Enhancement"), "-"));
-        Add(b, new (_("MX Enhancement"), _("Reset All Enhancements"), "script-message-to mpvnet mx-reset-enhancements", "Ctrl+0"));
+        Add(b, new ("⚡ MX 增强与画质神器", "📚 本地媒体库...", "script-message-to mpvnet mx-show-media-library", "Ctrl+l"));
+        Add(b, new ("⚡ MX 增强与画质神器", "-"));
+        Add(b, new ("⚡ MX 增强与画质神器", "🎧 夜间人声防扰 (人声对白增强)", "script-message-to mpvnet mx-toggle-night-mode", "n"));
+        Add(b, new ("⚡ MX 增强与画质神器", "✨ 智能细节锐化 (自适应高清晰度)", "script-message-to mpvnet mx-toggle-sharpen", "u"));
+        Add(b, new ("⚡ MX 增强与画质神器", "🎨 鲜艳色彩与对比度优化", "script-message-to mpvnet mx-toggle-vibrant", "i"));
+        Add(b, new ("⚡ MX 增强与画质神器", "📢 200% 超量音量增益", "script-message-to mpvnet mx-toggle-volume-boost", "b"));
+        Add(b, new ("⚡ MX 增强与画质神器", "🌸 二次元动漫画质增强", "script-message-to mpvnet mx-toggle-anime"));
+        Add(b, new ("⚡ MX 增强与画质神器", "-"));
+        Add(b, new ("⚡ MX 增强与画质神器", "🔄 一键复位所有画质增强", "script-message-to mpvnet mx-reset-enhancements", "Ctrl+0"));
 
         Add(b, new (_("Navigate"), _("Previous File"), "playlist-prev", "F11"));
         Add(b, new (_("Navigate"), _("Next File"), "playlist-next", "F12"));
