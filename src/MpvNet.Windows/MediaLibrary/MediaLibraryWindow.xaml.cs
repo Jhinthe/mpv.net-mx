@@ -14,7 +14,18 @@ namespace MpvNet.Windows.MediaLibrary;
 
 public partial class MediaLibraryWindow : Window
 {
-    private static MediaLibraryWindow? _instance;
+        private static MediaLibraryWindow? _instance;
+    private static bool _isExiting = false;
+
+    public static void CloseInstance()
+    {
+        _isExiting = true;
+        _instance?.Dispatcher?.Invoke(() =>
+        {
+            _instance?.Close();
+            _instance = null;
+        });
+    }
     public static MediaLibraryWindow Instance => _instance ??= new MediaLibraryWindow();
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
@@ -102,8 +113,7 @@ public partial class MediaLibraryWindow : Window
 
     private void MediaLibraryWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
-        e.Cancel = true;
-        this.Hide();
+        if (!_isExiting) { e.Cancel = true; this.Hide(); }
     }
 
     private void UpdateI18nTexts()

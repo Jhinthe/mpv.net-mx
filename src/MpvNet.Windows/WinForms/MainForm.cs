@@ -1562,6 +1562,18 @@ public partial class MainForm : Form
             Msg.ShowError(_("Shutdown thread failed to complete within 10 seconds."));
 
         Player.Destroy();
+        try
+        {
+            MediaLibrary.MediaLibraryWindow.CloseInstance();
+            System.Windows.Application.Current?.Dispatcher?.InvokeShutdown();
+        }
+        catch {}
+    }
+
+    protected override void OnFormClosed(FormClosedEventArgs e)
+    {
+        base.OnFormClosed(e);
+        Environment.Exit(0);
     }
 
     protected override void OnMouseDown(MouseEventArgs e)
