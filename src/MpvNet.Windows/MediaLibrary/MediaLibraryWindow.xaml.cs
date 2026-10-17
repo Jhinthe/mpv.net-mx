@@ -212,6 +212,17 @@ public partial class MediaLibraryWindow : Window
         {
             BreadcrumbPanel.Visibility = Visibility.Collapsed;
             TxtViewHeading.Visibility = Visibility.Visible;
+            if (!string.IsNullOrEmpty(_currentFilter))
+            {
+                int matchCount = (ItemsVideosGrid.ItemsSource as System.Collections.ICollection)?.Count
+                              ?? (ItemsVideosList.ItemsSource as System.Collections.ICollection)?.Count
+                              ?? (ItemsMusic.ItemsSource as System.Collections.ICollection)?.Count
+                              ?? 0;
+                TxtViewHeading.Text = MxI18n.CurrentLanguage == MxLanguage.Zh
+                    ? $"🔍 搜索结果: 找到 {matchCount} 部匹配内容"
+                    : $"🔍 Search: Found {matchCount} matching items";
+            }
+            else
             if (TabAllVideos.IsChecked == true)
                 TxtViewHeading.Text = MxI18n.T("TabAllVideos");
             else if (TabFolders.IsChecked == true)
@@ -497,19 +508,54 @@ public partial class MediaLibraryWindow : Window
         }
     }
 
+    private void SearchBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            var firstItem = (ItemsVideosGrid.ItemsSource as IEnumerable<MediaItem>)?.FirstOrDefault()
+                         ?? (ItemsVideosList.ItemsSource as IEnumerable<MediaItem>)?.FirstOrDefault()
+                         ?? (ItemsMusic.ItemsSource as IEnumerable<MediaItem>)?.FirstOrDefault();
+            if (firstItem != null)
+            {
+                PlayMedia(firstItem);
+                e.Handled = true;
+            }
+        }
+        else if (e.Key == Key.Escape)
+        {
+            if (!string.IsNullOrEmpty(SearchBox.Text))
+            {
+                SearchBox.Text = "";
+                e.Handled = true;
+            }
+        }
+    }
+
     private void Window_KeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Escape)
         {
             if (_activeFolderPath != null)
             {
-                // 先返回文件夹列表
-                BtnBackToFolders_Click(sender, e);
+                _activeFolderPath = null;
+                RefreshViews();
             }
             else
             {
                 Close();
             }
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Back && _activeFolderPath != null && !SearchBox.IsFocused)
+        {
+            _activeFolderPath = null;
+            RefreshViews();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.F && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+        {
+            SearchBox.Focus();
+            SearchBox.SelectAll();
             e.Handled = true;
         }
         else if (e.Key == Key.F5)

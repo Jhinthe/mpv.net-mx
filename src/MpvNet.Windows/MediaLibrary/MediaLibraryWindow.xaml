@@ -255,6 +255,14 @@
                                             </Border>
 
                                             <!-- 底部续播红条 -->
+                                            <!-- 悬停即现的流光播放按钮 -->
+                                            <Border x:Name="PlayOverlay" Background="#40000000" Opacity="0">
+                                                <Border Width="44" Height="44" CornerRadius="22" Background="#E5E50914"
+                                                        HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                    <TextBlock Text="▶" FontSize="18" Foreground="#FFFFFF"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center" Margin="3,0,0,0"/>
+                                                </Border>
+                                            </Border>
                                             <ProgressBar Value="{Binding ProgressRatio, Mode=OneWay}" Maximum="1.0"
                                                          VerticalAlignment="Bottom" Height="3.5" Background="#40000000"
                                                          Foreground="#E50914" BorderThickness="0"/>
@@ -274,6 +282,11 @@
                                     </StackPanel>
                                 </Grid>
                             </Border>
+                            <DataTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="PlayOverlay" Property="Opacity" Value="1"/>
+                                </Trigger>
+                            </DataTemplate.Triggers>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
