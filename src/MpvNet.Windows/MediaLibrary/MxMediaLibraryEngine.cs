@@ -155,15 +155,23 @@ public class MxMediaLibraryEngine
 
     public void RemoveItem(string filePath)
     {
-        var target = AllItems.FirstOrDefault(it => string.Equals(it.FilePath, filePath, StringComparison.OrdinalIgnoreCase));
-        if (target != null)
+        Action act = () =>
         {
-            AllItems.Remove(target);
-            RebuildFolders();
-            SaveCache();
-        }
-    }
+            var target = AllItems.FirstOrDefault(it => string.Equals(it.FilePath, filePath, StringComparison.OrdinalIgnoreCase));
+            if (target != null)
+            {
+                AllItems.Remove(target);
+                RebuildFolders();
+                SaveCache();
+                ItemsChanged?.Invoke();
+            }
+        };
 
+        if (System.Windows.Application.Current?.Dispatcher != null && !System.Windows.Application.Current.Dispatcher.CheckAccess())
+            System.Windows.Application.Current.Dispatcher.Invoke(act);
+        else
+            act();
+    }
     /// <summary>
     /// 扫描全盘或指定根目录
     /// </summary>
@@ -452,27 +460,46 @@ public class MxMediaLibraryEngine
 
     public void RebuildFolders()
     {
-        Folders.Clear();
-        var groups = AllItems.GroupBy(it => it.DirectoryPath, StringComparer.OrdinalIgnoreCase);
+        var groups = AllItems.GroupBy(it => it.DirectoryPath, StringComparer.OrdinalIgnoreCase).ToList();
+        var folderList = new List<FolderItem>();
 
         foreach (var g in groups)
         {
+            if (string.IsNullOrEmpty(g.Key)) continue;
+
+            string dirName = Path.GetFileName(g.Key.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            if (string.IsNullOrEmpty(dirName))
+                dirName = g.Key;
+
             var firstVideo = g.FirstOrDefault(it => it.Type == MediaType.Video && !string.IsNullOrEmpty(it.ThumbnailPath));
-            var folder = new FolderItem
+
+            folderList.Add(new FolderItem
             {
                 FolderPath = g.Key,
-                FolderName = Path.GetFileName(g.Key.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)),
+                FolderName = dirName,
                 VideoCount = g.Count(it => it.Type == MediaType.Video),
                 AudioCount = g.Count(it => it.Type == MediaType.Audio),
                 CoverThumbnailPath = firstVideo?.ThumbnailPath ?? "",
                 Items = g.ToList()
-            };
-            if (string.IsNullOrEmpty(folder.FolderName))
-                folder.FolderName = g.Key;
-
-            Folders.Add(folder);
+            });
         }
+
+        var sorted = folderList.OrderBy(f => f.FolderName).ToList();
+
+        Action update = () =>
+        {
+            Folders.Clear();
+            foreach (var f in sorted)
+                Folders.Add(f);
+        };
+
+        if (System.Windows.Application.Current?.Dispatcher != null && !System.Windows.Application.Current.Dispatcher.CheckAccess())
+            System.Windows.Application.Current.Dispatcher.Invoke(update);
+        else
+            update();
     }
+
+    private DateTime _lastProgressSave = DateTime.MinValue;
 
     public void UpdatePlaybackProgress(string filePath, double position, double duration)
     {
@@ -484,10 +511,15 @@ public class MxMediaLibraryEngine
             item.DurationSeconds = duration;
             item.ProgressRatio = Math.Clamp(position / duration, 0.0, 1.0);
             item.DurationString = FormatTime(duration);
-            SaveCache();
+
+            // 节流写入，每 3 秒最多落盘一次，保护磁盘健康
+            if ((DateTime.Now - _lastProgressSave).TotalSeconds > 3.0)
+            {
+                _lastProgressSave = DateTime.Now;
+                SaveCache();
+            }
         }
     }
-
     public long GetTotalSizeBytes() => AllItems.Sum(it => it.FileSizeBytes);
 
     private string GetOrCreateThumbnail(string videoPath)
