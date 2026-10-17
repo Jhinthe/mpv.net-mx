@@ -68,11 +68,25 @@ public class MxMediaLibraryEngine
     {
         "System Volume Information", "$Recycle.Bin", "$RECYCLE.BIN", "Windows", "Program Files",
         "Program Files (x86)", "ProgramData", "AppData", "Recovery", "Config.Msi", "PerfLogs",
-        "node_modules", ".git", ".vs", "bin", "obj", "temp", "cache"
+        "node_modules", ".git", ".vs", "bin", "obj", "temp", "cache",
+        "WeatherBgCache", "QQNT", "Tencent", "WeChat Files", "WXWork", "DingTalk",
+        "Packages", "LocalState", "IsolatedStorage", "CrashDumps", "CrashReport",
+        "Thumbnails", "Thumb", "Asset", "Assets", "Caches"
     };
 
+    public static bool IsJunkMedia(string fullPath)
+    {
+        string p = fullPath.ToLowerInvariant();
+        return p.Contains("weatherbgcache") || p.Contains("qqnt") || p.Contains("tencent")
+            || p.Contains("wechat") || p.Contains("wxwork") || p.Contains("dingtalk")
+            || p.Contains("packages") || p.Contains("localstate") || p.Contains("isolatedstorage")
+            || p.Contains("crashdumps") || p.Contains("thumbnails") || p.Contains(".thumb")
+            || p.Contains("\\assets\\") || p.Contains("\\asset\\") || p.Contains("\\temp\\")
+            || p.Contains("\\tmp\\") || p.Contains("cloudy_") || p.Contains("sunny_") || p.Contains("overcast");
+    }
+
     // 最小文件大小过滤（默认 2MB，过滤极短无意义的系统音效或小碎片）
-    private const long MinVideoBytes = 300 * 1024;
+    private const long MinVideoBytes = 3 * 1024 * 1024;
     private const long MinAudioBytes = 100 * 1024;
 
     public ObservableCollection<MediaItem> AllItems { get; } = [];
@@ -114,7 +128,7 @@ public class MxMediaLibraryEngine
                 AllItems.Clear();
                 foreach (var it in items)
                 {
-                    if (File.Exists(it.FilePath))
+                    if (File.Exists(it.FilePath) && !IsJunkMedia(it.FilePath))
                         AllItems.Add(it);
                 }
                 RebuildFolders();
@@ -390,6 +404,23 @@ public class MxMediaLibraryEngine
 
             if (isVideo)
             {
+                if (IsJunkMedia(fi.FullName))
+                    return null;
+
+                var (dur, res) = WindowsThumbnailProvider.GetMediaDetails(fi.FullName);
+                item.DurationSeconds = dur;
+                if (dur > 0)
+                {
+                    item.DurationString = FormatTime(dur);
+                }
+                item.Resolution = res;
+
+                // 过滤极短且体积较小的非视频动画/小表情
+                if (dur > 0 && dur < 6.0 && fi.Length < 25 * 1024 * 1024)
+                {
+                    return null;
+                }
+
                 string thumbPath = GetOrCreateThumbnail(fi.FullName);
                 item.ThumbnailPath = thumbPath;
             }
@@ -558,5 +589,81 @@ internal static class WindowsThumbnailProvider
                 DeleteObject(hBitmap);
         }
         return null;
+    }
+
+    [ComImport]
+    [Guid("7e9fb0d3-919f-4307-ab2e-9b1860310c93")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IShellItem2
+    {
+        void BindToHandler();
+        void GetParent();
+        void GetDisplayName();
+        void GetAttributes();
+        void Compare();
+        [PreserveSig]
+        int GetPropertyStore(int flags, [In, MarshalAs(UnmanagedType.LPStruct)] Guid riid, [Out] out IntPtr ppv);
+        void GetPropertyDescriptionList();
+        void Update();
+        void GetProperty();
+        void GetCLSID();
+        void GetFileTime();
+        void GetInt32();
+        void GetString();
+        [PreserveSig]
+        int GetUInt64([In] ref PropertyKey key, out ulong pull);
+        [PreserveSig]
+        int GetUInt32([In] ref PropertyKey key, out uint pull);
+        void GetBool();
+    }
+
+    [StructLayout(LayoutKind.Sequential, Pack = 4)]
+    private struct PropertyKey
+    {
+        public Guid fmtid;
+        public uint pid;
+        public PropertyKey(Guid f, uint p) { fmtid = f; pid = p; }
+    }
+
+    [DllImport("shell32.dll", EntryPoint = "SHCreateItemFromParsingName", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern int SHCreateItemFromParsingName2(
+        [MarshalAs(UnmanagedType.LPWStr)] string path,
+        IntPtr pbc,
+        [In, MarshalAs(UnmanagedType.LPStruct)] Guid riid,
+        [Out, MarshalAs(UnmanagedType.Interface)] out IShellItem2 ppv);
+
+    public static (double DurationSec, string Resolution) GetMediaDetails(string filePath)
+    {
+        try
+        {
+            Guid uuid = new Guid("7e9fb0d3-919f-4307-ab2e-9b1860310c93");
+            int hr = SHCreateItemFromParsingName2(filePath, IntPtr.Zero, uuid, out var item);
+            if (hr == 0 && item != null)
+            {
+                var PKEY_Media_Duration = new PropertyKey(new Guid("64440490-4c8b-11d1-8b70-080036b11a03"), 3);
+                var PKEY_Video_FrameWidth = new PropertyKey(new Guid("64440491-4c8b-11d1-8b70-080036b11a03"), 3);
+                var PKEY_Video_FrameHeight = new PropertyKey(new Guid("64440491-4c8b-11d1-8b70-080036b11a03"), 4);
+
+                double duration = 0;
+                if (item.GetUInt64(ref PKEY_Media_Duration, out ulong ticks) == 0 && ticks > 0)
+                {
+                    duration = ticks / 10000000.0;
+                }
+
+                string res = "";
+                if (item.GetUInt32(ref PKEY_Video_FrameWidth, out uint w) == 0 &&
+                    item.GetUInt32(ref PKEY_Video_FrameHeight, out uint h) == 0 && w > 0 && h > 0)
+                {
+                    if (w >= 3800 || h >= 2100) res = "4K";
+                    else if (w >= 1900 || h >= 1000) res = "1080P";
+                    else if (w >= 1200 || h >= 700) res = "720P";
+                    else res = $"{w}P";
+                }
+
+                return (duration, res);
+            }
+        }
+        catch {}
+        return (0, "");
     }
 }

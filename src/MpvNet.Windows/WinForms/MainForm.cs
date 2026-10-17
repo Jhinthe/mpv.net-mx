@@ -1446,6 +1446,7 @@ public partial class MainForm : Form
         {
             this.BeginInvoke(new Action(() =>
             {
+                this.Hide();
                 MediaLibrary.MediaLibraryWindow.ShowInstance();
             }));
         }

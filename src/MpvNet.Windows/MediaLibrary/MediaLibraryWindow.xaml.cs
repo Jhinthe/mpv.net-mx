@@ -1,4 +1,4 @@
-using MpvNet.Windows.WinForms;
+﻿using MpvNet.Windows.WinForms;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -33,53 +33,36 @@ public partial class MediaLibraryWindow : Window
 
     public static void ShowInstance()
     {
-        var app = System.Windows.Application.Current;
-        if (app != null && app.Dispatcher != null)
+        Action act = () =>
         {
-            if (app.Dispatcher.CheckAccess())
+            if (System.Windows.Application.Current == null)
             {
-                EnsureAndShowWindow();
+                new System.Windows.Application();
+                if (System.Windows.Application.Current != null) System.Windows.Application.Current.ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown;
             }
-            else
-            {
-                app.Dispatcher.BeginInvoke(new Action(EnsureAndShowWindow));
-            }
-        }
-        else
-        {
-            EnsureAndShowWindow();
-        }
-    }
 
-    private static void EnsureAndShowWindow()
-    {
-        try
-        {
             if (_instance == null || !_instance.IsLoaded)
             {
                 _instance = new MediaLibraryWindow();
             }
 
-            if (_instance.Visibility != Visibility.Visible)
-            {
-                _instance.Show();
-            }
-
+            _instance.Show();
             if (_instance.WindowState == WindowState.Minimized)
-            {
                 _instance.WindowState = WindowState.Normal;
-            }
-
             _instance.Activate();
-            _instance.Focus();
+            IntPtr hwnd = new System.Windows.Interop.WindowInteropHelper(_instance).Handle;
+            if (hwnd != IntPtr.Zero)
+                SetForegroundWindow(hwnd);
+        };
 
-            var helper = new System.Windows.Interop.WindowInteropHelper(_instance);
-            if (helper.Handle != IntPtr.Zero)
-            {
-                SetForegroundWindow(helper.Handle);
-            }
+        if (MainForm.Instance != null && MainForm.Instance.InvokeRequired)
+        {
+            MainForm.Instance.BeginInvoke(act);
         }
-        catch {}
+        else
+        {
+            act();
+        }
     }
     private readonly MxMediaLibraryEngine _engine = MxMediaLibraryEngine.Instance;
     private string _currentFilter = "";
@@ -111,9 +94,37 @@ public partial class MediaLibraryWindow : Window
         }
     }
 
+    [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        IntPtr hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        if (hwnd != IntPtr.Zero)
+        {
+            int darkMode = 1;
+            DwmSetWindowAttribute(hwnd, 20, ref darkMode, sizeof(int));
+            DwmSetWindowAttribute(hwnd, 19, ref darkMode, sizeof(int));
+            int captionColor = 0x161414;
+            DwmSetWindowAttribute(hwnd, 35, ref captionColor, sizeof(int));
+        }
+    }
+
     private void MediaLibraryWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
-        if (!_isExiting) { e.Cancel = true; this.Hide(); }
+        if (_isExiting) return;
+
+        if (MainForm.Instance == null || !MainForm.Instance.Visible || string.IsNullOrEmpty(Player.Path))
+        {
+            _isExiting = true;
+            Environment.Exit(0);
+            return;
+        }
+
+        e.Cancel = true;
+        this.Hide();
+        MainForm.Instance.Activate();
     }
 
     private void UpdateI18nTexts()

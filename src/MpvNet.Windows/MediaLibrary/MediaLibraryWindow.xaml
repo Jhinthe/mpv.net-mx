@@ -27,7 +27,7 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
-                        <Border x:Name="border" Background="Transparent" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                        <Border x:Name="border" Background="Transparent" CornerRadius="8" Padding="{TemplateBinding Padding}" BorderThickness="1.5" BorderBrush="Transparent">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -36,7 +36,8 @@
                                 <Setter Property="Foreground" Value="#FFFFFF"/>
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#E50914"/>
+                                <Setter TargetName="border" Property="Background" Value="#252532"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#E50914"/>
                                 <Setter Property="Foreground" Value="#FFFFFF"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -124,7 +125,13 @@
 
                 <!-- Logo 与产品标题 -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,20,0">
-                    <Border Background="#E50914" CornerRadius="6" Padding="6,2" Margin="0,0,8,0">
+                                        <Border CornerRadius="6" Padding="7,2" Margin="0,0,8,0">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                <GradientStop Color="#E50914" Offset="0"/>
+                                <GradientStop Color="#9B060D" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
                         <TextBlock Text="MX" FontSize="14" FontWeight="Bold" Foreground="#FFFFFF"/>
                     </Border>
                     <TextBlock x:Name="TxtBrandTitle" Text=" 媒体库" FontSize="17" FontWeight="Bold" Foreground="#FFFFFF" VerticalAlignment="Center"/>
@@ -236,6 +243,11 @@
                                         <Grid>
                                             <Image Source="{Binding ThumbnailPath, Converter={StaticResource ThumbnailConverter}, ConverterParameter=320}" Stretch="UniformToFill"/>
                                             
+                                            <!-- 分辨率标签 (1080P, 4K, 720P) -->
+                                            <Border HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                    Background="#D00A0A12" CornerRadius="4" Padding="5,1" Margin="8">
+                                                <TextBlock Text="{Binding Resolution}" FontSize="10" FontWeight="Bold" Foreground="#38BDF8"/>
+                                            </Border>
                                             <!-- 时长药丸标签 -->
                                             <Border HorizontalAlignment="Right" VerticalAlignment="Bottom"
                                                     Background="#D9000000" CornerRadius="4" Padding="6,2" Margin="8">
