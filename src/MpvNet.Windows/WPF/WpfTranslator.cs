@@ -55,14 +55,16 @@ public class WpfTranslator : ITranslator
 
     CultureInfo GetCulture(string name)
     {
-        if (name == "system")
-            name = GetSystemLanguage();
+        if (string.IsNullOrEmpty(name) || name == "system" || name == "zh" || name == "zh-CN" || name == "chinese-china" || name.StartsWith("zh", StringComparison.OrdinalIgnoreCase))
+            return new CultureInfo("zh-CN");
 
         foreach (Language lang in Languages)
-            if (lang.MpvNetName == name)
+            if (lang.MpvNetName.Equals(name, StringComparison.OrdinalIgnoreCase) ||
+                lang.CultureInfoName.Equals(name, StringComparison.OrdinalIgnoreCase) ||
+                lang.TwoLetterName.Equals(name, StringComparison.OrdinalIgnoreCase))
                 return new CultureInfo(lang.CultureInfoName);
 
-        return new CultureInfo("en");
+        return new CultureInfo("zh-CN");
     }
 
     class Language

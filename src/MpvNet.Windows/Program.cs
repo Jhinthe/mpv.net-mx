@@ -24,7 +24,13 @@ static class Program
             Application.SetCompatibleTextRenderingDefault(false);
 
             AppDomain.CurrentDomain.UnhandledException += (sender, e) => Terminal.WriteError(e.ExceptionObject);
-            Application.ThreadException += (sender, e) => Terminal.WriteError(e.Exception);
+            Application.ThreadException += (sender, e) => {
+    try { System.IO.File.WriteAllText(@"J:\mpv.net\crash_details.txt", e.Exception.ToString()); } catch {}
+    Terminal.WriteError(e.Exception);
+};
+AppDomain.CurrentDomain.UnhandledException += (sender, e) => {
+    try { System.IO.File.WriteAllText(@"J:\mpv.net\crash_details.txt", e.ExceptionObject.ToString()); } catch {}
+};
 
             if (App.IsTerminalAttached)
                 WinApi.AttachConsole(-1 /*ATTACH_PARENT_PROCESS*/);
