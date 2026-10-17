@@ -886,6 +886,12 @@ public partial class MainForm : Form
     void Player_FileLoaded()
     {
         BeginInvoke(() => {
+            MediaLibrary.MediaLibraryWindow.HideInstance();
+            this.Show();
+            if (this.WindowState == FormWindowState.Minimized)
+                this.WindowState = FormWindowState.Normal;
+            this.BringToFront();
+            this.Activate();
             SetTitleInternal();
 
             int interval = (int)(Player.Duration.TotalMilliseconds / 100);

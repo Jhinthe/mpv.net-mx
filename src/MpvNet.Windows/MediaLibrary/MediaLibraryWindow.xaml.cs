@@ -64,6 +64,22 @@ public partial class MediaLibraryWindow : Window
             act();
         }
     }
+
+    public static void HideInstance()
+    {
+        Action act = () =>
+        {
+            if (_instance != null && _instance.IsLoaded && _instance.IsVisible)
+            {
+                _instance.Hide();
+            }
+        };
+
+        if (System.Windows.Application.Current?.Dispatcher != null && !System.Windows.Application.Current.Dispatcher.CheckAccess())
+            System.Windows.Application.Current.Dispatcher.BeginInvoke(act);
+        else
+            act();
+    }
     private readonly MxMediaLibraryEngine _engine = MxMediaLibraryEngine.Instance;
         private string _currentFilter = "";
     private readonly System.Windows.Threading.DispatcherTimer _searchDebounceTimer;
