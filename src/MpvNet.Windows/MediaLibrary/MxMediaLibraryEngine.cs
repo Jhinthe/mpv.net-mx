@@ -568,10 +568,11 @@ internal static class WindowsThumbnailProvider
     public static Bitmap? GetThumbnail(string filePath, int width, int height)
     {
         IntPtr hBitmap = IntPtr.Zero;
+        IShellItemImageFactory? factory = null;
         try
         {
             Guid uuid = new Guid("bcc18b79-ba16-442f-80c4-8a59c30c463b");
-            int hr = SHCreateItemFromParsingName(filePath, IntPtr.Zero, uuid, out var factory);
+            int hr = SHCreateItemFromParsingName(filePath, IntPtr.Zero, uuid, out factory);
             if (hr != 0 || factory == null) return null;
 
             var size = new NativeSize(width, height);
@@ -587,6 +588,7 @@ internal static class WindowsThumbnailProvider
         {
             if (hBitmap != IntPtr.Zero)
                 DeleteObject(hBitmap);
+            if (factory != null && Marshal.IsComObject(factory)) Marshal.ReleaseComObject(factory);
         }
         return null;
     }
@@ -634,10 +636,11 @@ internal static class WindowsThumbnailProvider
 
     public static (double DurationSec, string Resolution) GetMediaDetails(string filePath)
     {
+        IShellItem2? item = null;
         try
         {
             Guid uuid = new Guid("7e9fb0d3-919f-4307-ab2e-9b1860310c93");
-            int hr = SHCreateItemFromParsingName2(filePath, IntPtr.Zero, uuid, out var item);
+            int hr = SHCreateItemFromParsingName2(filePath, IntPtr.Zero, uuid, out item);
             if (hr == 0 && item != null)
             {
                 var PKEY_Media_Duration = new PropertyKey(new Guid("64440490-4c8b-11d1-8b70-080036b11a03"), 3);
@@ -664,6 +667,11 @@ internal static class WindowsThumbnailProvider
             }
         }
         catch {}
+        finally
+        {
+            if (item != null && Marshal.IsComObject(item))
+                Marshal.ReleaseComObject(item);
+        }
         return (0, "");
     }
 }

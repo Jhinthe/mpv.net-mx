@@ -65,12 +65,22 @@ public partial class MediaLibraryWindow : Window
         }
     }
     private readonly MxMediaLibraryEngine _engine = MxMediaLibraryEngine.Instance;
-    private string _currentFilter = "";
+        private string _currentFilter = "";
+    private readonly System.Windows.Threading.DispatcherTimer _searchDebounceTimer;
     private string? _activeFolderPath = null; // 当前正在深入浏览的文件夹路径
 
     public MediaLibraryWindow()
     {
-        InitializeComponent();
+                InitializeComponent();
+        _searchDebounceTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(150)
+        };
+        _searchDebounceTimer.Tick += (s, e) =>
+        {
+            _searchDebounceTimer.Stop();
+            RefreshViews();
+        };
 
         _engine.ScanStarted += OnScanStarted;
         _engine.ScanProgress += OnScanProgress;
@@ -345,12 +355,15 @@ public partial class MediaLibraryWindow : Window
         _currentFilter = SearchBox.Text;
         TxtSearchPlaceholder.Visibility = string.IsNullOrEmpty(_currentFilter) ? Visibility.Visible : Visibility.Collapsed;
         BtnClearSearch.Visibility = string.IsNullOrEmpty(_currentFilter) ? Visibility.Collapsed : Visibility.Visible;
-        RefreshViews();
+        _searchDebounceTimer.Stop();
+        _searchDebounceTimer.Start();
     }
 
     private void BtnClearSearch_Click(object sender, RoutedEventArgs e)
     {
+        _searchDebounceTimer.Stop();
         SearchBox.Text = "";
+        RefreshViews();
         SearchBox.Focus();
     }
 
