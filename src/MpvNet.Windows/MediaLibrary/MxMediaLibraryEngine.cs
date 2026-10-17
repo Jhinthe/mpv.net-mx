@@ -129,6 +129,10 @@ public class MxMediaLibraryEngine
                 foreach (var it in items)
                 {
                     if (File.Exists(it.FilePath) && !IsJunkMedia(it.FilePath))
+                        if (it.DurationSeconds > 0 && (string.IsNullOrEmpty(it.DurationString) || it.DurationString == "--:--"))
+                        {
+                            it.DurationString = FormatTime(it.DurationSeconds);
+                        }
                         AllItems.Add(it);
                 }
                 RebuildFolders();
@@ -198,6 +202,19 @@ public class MxMediaLibraryEngine
                     {
                         if (existingMap.TryGetValue(file, out var existing))
                         {
+                        if (existing.Type == MediaType.Video && (existing.DurationSeconds <= 0 || string.IsNullOrEmpty(existing.DurationString) || existing.DurationString == "--:--"))
+                        {
+                            var (dur, res) = WindowsThumbnailProvider.GetMediaDetails(file);
+                            if (dur > 0)
+                            {
+                                existing.DurationSeconds = dur;
+                                existing.DurationString = FormatTime(dur);
+                            }
+                            if (!string.IsNullOrEmpty(res))
+                            {
+                                existing.Resolution = res;
+                            }
+                        }
                             newItems.Add(existing);
                         }
                         else
@@ -634,34 +651,64 @@ internal static class WindowsThumbnailProvider
         [In, MarshalAs(UnmanagedType.LPStruct)] Guid riid,
         [Out, MarshalAs(UnmanagedType.Interface)] out IShellItem2 ppv);
 
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern int SHGetPropertyStoreFromParsingName(
+        [MarshalAs(UnmanagedType.LPWStr)] string pszPath,
+        IntPtr pbc,
+        int flags,
+        [In, MarshalAs(UnmanagedType.LPStruct)] Guid riid,
+        [Out, MarshalAs(UnmanagedType.Interface)] out IPropertyStore ppv);
+
+    [ComImport]
+    [Guid("886d8eeb-8cf2-4446-8d02-cdba1dbdcf99")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IPropertyStore
+    {
+        [PreserveSig] int GetCount(out uint cProps);
+        [PreserveSig] int GetAt(uint iProp, out PropertyKey pkey);
+        [PreserveSig] int GetValue(ref PropertyKey key, [In, Out] PropVariant pv);
+    }
+
+    [StructLayout(LayoutKind.Explicit)]
+    private class PropVariant
+    {
+        [FieldOffset(0)] public ushort vt;
+        [FieldOffset(8)] public ulong uhVal;
+        [FieldOffset(8)] public uint ulVal;
+    }
+
     public static (double DurationSec, string Resolution) GetMediaDetails(string filePath)
     {
-        IShellItem2? item = null;
+        IPropertyStore? store = null;
         try
         {
-            Guid uuid = new Guid("7e9fb0d3-919f-4307-ab2e-9b1860310c93");
-            int hr = SHCreateItemFromParsingName2(filePath, IntPtr.Zero, uuid, out item);
-            if (hr == 0 && item != null)
+            Guid riid = new Guid("886d8eeb-8cf2-4446-8d02-cdba1dbdcf99");
+            int hr = SHGetPropertyStoreFromParsingName(filePath, IntPtr.Zero, 0, riid, out store);
+            if (hr == 0 && store != null)
             {
-                var PKEY_Media_Duration = new PropertyKey(new Guid("64440490-4c8b-11d1-8b70-080036b11a03"), 3);
-                var PKEY_Video_FrameWidth = new PropertyKey(new Guid("64440491-4c8b-11d1-8b70-080036b11a03"), 3);
-                var PKEY_Video_FrameHeight = new PropertyKey(new Guid("64440491-4c8b-11d1-8b70-080036b11a03"), 4);
+                // PKEY_Media_Duration = {64440490-4c8b-11d1-8b70-080036b11a03}, 3
+                PropertyKey kDur = new PropertyKey(new Guid("64440490-4c8b-11d1-8b70-080036b11a03"), 3);
+                PropVariant pvDur = new PropVariant();
+                store.GetValue(ref kDur, pvDur);
+                double duration = (pvDur.uhVal > 0) ? ((double)pvDur.uhVal / 10000000.0) : 0;
 
-                double duration = 0;
-                if (item.GetUInt64(ref PKEY_Media_Duration, out ulong ticks) == 0 && ticks > 0)
-                {
-                    duration = ticks / 10000000.0;
-                }
+                // PKEY_Video_FrameWidth / Height
+                PropertyKey kWidth = new PropertyKey(new Guid("64440491-4c8b-11d1-8b70-080036b11a03"), 3);
+                PropertyKey kHeight = new PropertyKey(new Guid("64440491-4c8b-11d1-8b70-080036b11a03"), 4);
+
+                PropVariant pvW = new PropVariant();
+                PropVariant pvH = new PropVariant();
+                store.GetValue(ref kWidth, pvW);
+                store.GetValue(ref kHeight, pvH);
+
+                uint width = pvW.ulVal;
+                uint height = pvH.ulVal;
 
                 string res = "";
-                if (item.GetUInt32(ref PKEY_Video_FrameWidth, out uint w) == 0 &&
-                    item.GetUInt32(ref PKEY_Video_FrameHeight, out uint h) == 0 && w > 0 && h > 0)
-                {
-                    if (w >= 3800 || h >= 2100) res = "4K";
-                    else if (w >= 1900 || h >= 1000) res = "1080P";
-                    else if (w >= 1200 || h >= 700) res = "720P";
-                    else res = $"{w}P";
-                }
+                if (width >= 3800 || height >= 2100) res = "4K";
+                else if (width >= 1900 || height >= 1000) res = "1080P";
+                else if (width >= 1200 || height >= 700) res = "720P";
+                else if (width > 0 && height > 0) res = $"{width}x{height}";
 
                 return (duration, res);
             }
@@ -669,8 +716,8 @@ internal static class WindowsThumbnailProvider
         catch {}
         finally
         {
-            if (item != null && Marshal.IsComObject(item))
-                Marshal.ReleaseComObject(item);
+            if (store != null && Marshal.IsComObject(store))
+                Marshal.ReleaseComObject(store);
         }
         return (0, "");
     }

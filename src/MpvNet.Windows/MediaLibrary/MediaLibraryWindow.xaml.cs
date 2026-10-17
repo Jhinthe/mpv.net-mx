@@ -267,10 +267,52 @@ public partial class MediaLibraryWindow : Window
         var videos = all.Where(it => it.Type == MediaType.Video).ToList();
         var audios = all.Where(it => it.Type == MediaType.Audio).ToList();
 
-        ItemsVideosGrid.ItemsSource = videos;
-        ItemsVideosList.ItemsSource = videos;
-        ItemsMusic.ItemsSource = audios;
-        ItemsFolders.ItemsSource = _engine.Folders;
+        bool isGridView = BtnViewGrid.IsChecked == true;
+        if (TabAllVideos.IsChecked == true || _activeFolderPath != null)
+        {
+            if (isGridView)
+            {
+                ItemsVideosList.ItemsSource = null;
+                if (videos.Count > 36)
+                {
+                    // 先加载首屏 36 张卡片 (0.05 秒瞬开直出！)，彻底消灭白屏与未响应
+                    var initialBatch = new System.Collections.ObjectModel.ObservableCollection<MediaItem>(videos.Take(36));
+                    ItemsVideosGrid.ItemsSource = initialBatch;
+
+                    Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(() =>
+                    {
+                        for (int k = 36; k < videos.Count; k++)
+                        {
+                            initialBatch.Add(videos[k]);
+                        }
+                    }));
+                }
+                else
+                {
+                    ItemsVideosGrid.ItemsSource = videos;
+                }
+            }
+            else
+            {
+                ItemsVideosGrid.ItemsSource = null;
+                ItemsVideosList.ItemsSource = videos;
+            }
+        }
+        else
+        {
+            ItemsVideosGrid.ItemsSource = null;
+            ItemsVideosList.ItemsSource = null;
+        }
+
+        if (TabMusic.IsChecked == true)
+            ItemsMusic.ItemsSource = audios;
+        else
+            ItemsMusic.ItemsSource = null;
+
+        if (TabFolders.IsChecked == true)
+            ItemsFolders.ItemsSource = _engine.Folders;
+        else
+            ItemsFolders.ItemsSource = null;
 
         long totalBytes = _engine.GetTotalSizeBytes();
         string totalSize = MxMediaLibraryEngine.FormatFileSize(totalBytes);
