@@ -503,6 +503,20 @@ public partial class MediaLibraryWindow : Window
 
     private void PlayMedia(MediaItem item)
     {
+        if (item == null || string.IsNullOrEmpty(item.FilePath) || !File.Exists(item.FilePath))
+        {
+            MessageBox.Show(
+                MxI18n.CurrentLanguage == MxLanguage.Zh ? "该视频文件已被移动、重命名或不存在！" : "Media file not found or has been moved!",
+                "mpv.net MX Player",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            if (item != null && !string.IsNullOrEmpty(item.FilePath))
+            {
+                _engine.RemoveItem(item.FilePath);
+                RefreshViews();
+            }
+            return;
+        }
         try
         {
             // 1. 先安全还原并呈现主播放器窗口，杜绝黑屏或窗口全隐引发的假闪退

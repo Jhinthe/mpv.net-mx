@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Globalization;
 using System.Windows.Forms;
@@ -111,7 +111,8 @@ public class MxGestureController
             // 右侧：调节音量 (0 ~ 130)
             double currentVolume = Player.GetPropertyDouble("volume");
             double step = delta > 0 ? 5 : -5;
-            double newVolume = Math.Clamp(currentVolume + step, 0, 130);
+                        double maxVol = Math.Max(100.0, Player.GetPropertyDouble("volume-max"));
+            double newVolume = Math.Clamp(currentVolume + step, 0, maxVol);
             Player.SetPropertyDouble("volume", newVolume);
             ShowOsd(MxI18n.T("OsdVolume", (int)Math.Round(newVolume)));
             return true;
@@ -187,7 +188,8 @@ public class MxGestureController
                 {
                     double height = Math.Max(100, _form.ClientSize.Height);
                     double ratio = -dy / height;
-                    double newVolume = Math.Clamp(_initialVolume + (ratio * 100), 0, 130);
+                                        double maxVol = Math.Max(100.0, Player.GetPropertyDouble("volume-max"));
+                    double newVolume = Math.Clamp(_initialVolume + (ratio * 100), 0, maxVol);
                     Player.SetPropertyDouble("volume", newVolume);
                     ShowOsd(MxI18n.T("OsdVolume", (int)Math.Round(newVolume)), 500);
                     return true;
