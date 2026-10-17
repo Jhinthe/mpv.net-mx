@@ -114,6 +114,9 @@ public class MainPlayer : MpvClient
         SetPropertyString("osc", "yes");
         SetPropertyString("config-dir", ConfigFolder);
         SetPropertyString("config", "yes");
+        string currentExe = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? "";
+        if (!string.IsNullOrEmpty(currentExe))
+            SetPropertyString("user-data/frontend/process-path", currentExe);
         
         UsedInputConfContent = App.InputConf.GetContent();
 

@@ -130,6 +130,13 @@ public class MxGestureController
 
     public void HandleMouseDown(Point clientPt)
     {
+        // 底部 18% 区域为原生控制条与进度条，不启动全屏拖拽手势
+        if ((double)clientPt.Y / Math.Max(1, _form.ClientSize.Height) > 0.82)
+        {
+            _currentMode = GestureMode.None;
+            return;
+        }
+
         _startPoint = clientPt;
         _startTime = DateTime.UtcNow;
         _currentMode = GestureMode.Determining;
@@ -145,6 +152,14 @@ public class MxGestureController
     public bool HandleMouseMove(Point clientPt)
     {
         if (_currentMode == GestureMode.None) return false;
+
+        // 安全防线：若左键已松开，强行复位手势，杜绝手势粘滞
+        if ((Control.MouseButtons & MouseButtons.Left) != MouseButtons.Left)
+        {
+            _currentMode = GestureMode.None;
+            _isDragging = false;
+            return false;
+        }
 
         int dx = clientPt.X - _startPoint.X;
         int dy = clientPt.Y - _startPoint.Y;
@@ -236,6 +251,11 @@ public class MxGestureController
 
     public bool HandleDoubleClick(Point clientPt)
     {
+        if ((double)clientPt.Y / Math.Max(1, _form.ClientSize.Height) > 0.82)
+        {
+            return false;
+        }
+
         double widthRatio = (double)clientPt.X / Math.Max(1, _form.ClientSize.Width);
 
         if (widthRatio < 0.35)
