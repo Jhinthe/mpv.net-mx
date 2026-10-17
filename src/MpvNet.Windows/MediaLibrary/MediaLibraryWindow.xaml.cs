@@ -505,36 +505,38 @@ public partial class MediaLibraryWindow : Window
     {
         try
         {
-            // 原生秒级续播：新版 libmpv loadfile 第3参数已改为 index (-1)，第4参数才是 options；也可先置 file-local-options/start
-            if (item.LastPosition > 5.0 && item.LastPosition < (item.DurationSeconds - 10.0))
-            {
-                string startArg = "start=" + item.LastPosition.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
-                Player.CommandV("loadfile", item.FilePath, "replace", "-1", startArg);
-            }
-            else
-            {
-                Player.CommandV("loadfile", item.FilePath, "replace");
-            }
-
-            this.Hide();
-
-            // 安全还原并提升底层播放器到前台
+            // 1. 先安全还原并呈现主播放器窗口，杜绝黑屏或窗口全隐引发的假闪退
             if (MainForm.Instance != null)
             {
-                MainForm.Instance.BeginInvoke(new Action(() =>
+                MainForm.Instance.Invoke(new Action(() =>
                 {
                     try
                     {
+                        MainForm.Instance.Show();
+                        MainForm.Instance.Visible = true;
                         if (MainForm.Instance.WindowState == System.Windows.Forms.FormWindowState.Minimized)
                         {
                             MainForm.Instance.WindowState = System.Windows.Forms.FormWindowState.Normal;
                         }
+                        MainForm.Instance.BringToFront();
                         MainForm.Instance.Activate();
                         SetForegroundWindow(MainForm.Instance.Handle);
                     }
                     catch {}
                 }));
             }
+
+            // 2. 调用播放器核心标准接口加载视频
+            Player.CommandV("loadfile", item.FilePath);
+
+            // 3. 毫秒级断点续播
+            if (item.LastPosition > 5.0 && item.LastPosition < (item.DurationSeconds - 10.0))
+            {
+                Player.CommandV("seek", item.LastPosition.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), "absolute");
+            }
+
+            // 4. 播放器已就位后平滑隐藏媒体库
+            this.Hide();
         }
         catch (Exception ex)
         {
