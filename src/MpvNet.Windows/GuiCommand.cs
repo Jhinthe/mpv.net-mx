@@ -49,6 +49,8 @@ public class GuiCommand
         ["mx-amd-fsr"] = args => MxShaderManager.ToggleAmdFsr(),
         ["mx-amd-cas"] = args => MxShaderManager.ToggleAmdCas(),
         ["mx-shaders-reset"] = args => MxShaderManager.ApplyMode(SuperResolutionMode.Off),
+        ["mx-toggle-pip"] = args => MainForm.Instance?.TogglePipMode(),
+        ["mx-toggle-pip-transparency"] = args => MainForm.Instance?.TogglePipTransparency(),
         ["mx-reset-enhancements"] = args => MxEnhancementManager.ResetAll(),
         ["add-to-path"] = args => AddToPath(),
         ["edit-conf-file"] = EditCongFile,

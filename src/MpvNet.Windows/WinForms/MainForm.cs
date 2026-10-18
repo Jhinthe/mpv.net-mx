@@ -47,6 +47,17 @@ public partial class MainForm : Form
         MxGestureController? _mxGesture;
     private System.Windows.Forms.Integration.ElementHost? _mediaLibraryHost;
     private MediaLibrary.MediaLibraryControl? _mediaLibraryControl;
+    [DllImport("user32.dll")]
+    private static extern bool ReleaseCapture();
+
+    private bool _isPipMode = false;
+    private bool _pipTransparent = false;
+    private Rectangle _restoreBounds;
+    private FormWindowState _restoreWindowState;
+    private FormBorderStyle _restoreBorderStyle;
+    private bool _restoreTopMost;
+
+    public bool IsPipMode => _isPipMode;
 
     public MainForm()
     {
@@ -883,6 +894,57 @@ public partial class MainForm : Form
         _contextMenuIsReady = true;
     }
     
+
+    public void TogglePipMode()
+    {
+        if (!_isPipMode)
+        {
+            _isPipMode = true;
+            _restoreBounds = this.Bounds;
+            _restoreWindowState = this.WindowState;
+            _restoreBorderStyle = this.FormBorderStyle;
+            _restoreTopMost = this.TopMost;
+
+            if (this.WindowState == FormWindowState.Maximized)
+                this.WindowState = FormWindowState.Normal;
+
+            this.FormBorderStyle = FormBorderStyle.None;
+            this.TopMost = true;
+
+            var workArea = Screen.FromControl(this).WorkingArea;
+            int pipWidth = 480;
+            int pipHeight = 270;
+            int margin = 24;
+            this.SetBounds(workArea.Right - pipWidth - margin, workArea.Bottom - pipHeight - margin, pipWidth, pipHeight);
+
+            MxEnhancementManager.ShowOsd(MxI18n.CurrentLanguage == MxLanguage.Zh 
+                ? "📌 极简画中画模式 (已开启 - 按 P 退出，按 Ctrl+P 切换透明摸鱼)" 
+                : "📌 Picture-in-Picture [ON] (Press P to exit)");
+        }
+        else
+        {
+            _isPipMode = false;
+            this.Opacity = 1.0;
+            this.FormBorderStyle = _restoreBorderStyle;
+            this.TopMost = _restoreTopMost;
+            this.Bounds = _restoreBounds;
+            this.WindowState = _restoreWindowState;
+
+            MxEnhancementManager.ShowOsd(MxI18n.CurrentLanguage == MxLanguage.Zh 
+                ? "📌 极简画中画模式 (已退出)" 
+                : "📌 Picture-in-Picture [OFF]");
+        }
+    }
+
+    public void TogglePipTransparency()
+    {
+        if (!_isPipMode) return;
+        _pipTransparent = !_pipTransparent;
+        this.Opacity = _pipTransparent ? 0.60 : 1.0;
+        MxEnhancementManager.ShowOsd(MxI18n.CurrentLanguage == MxLanguage.Zh 
+            ? (_pipTransparent ? "👻 画中画摸鱼透明度: 60% (半透明)" : "👻 画中画摸鱼透明度: 100% (不透明)")
+            : (_pipTransparent ? "👻 PiP Opacity: 60%" : "👻 PiP Opacity: 100%"));
+    }
     void Player_FileLoaded()
     {
         BeginInvoke(() => {
@@ -1009,6 +1071,12 @@ public partial class MainForm : Form
             case 0x0105: // WM_SYSKEYUP
             case 0x0201: // WM_LBUTTONDOWN
                 {
+                    if (_isPipMode && Control.MouseButtons == MouseButtons.Left)
+                    {
+                        ReleaseCapture();
+                        SendMessage(Handle, 0x00A1 /* WM_NCLBUTTONDOWN */, (IntPtr)2 /* HTCAPTION */, IntPtr.Zero);
+                        return;
+                    }
                     Point pos = PointToClient(Cursor.Position);
                     _mxGesture?.HandleMouseDown(pos);
                     goto case 0x0204;
