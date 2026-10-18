@@ -35,6 +35,8 @@ public class GuiCommand
     {
                         ["mx-show-media-library"] = args => { if (MainForm.Instance != null) MainForm.Instance.ShowMediaLibrary(); else ShowDialog(typeof(MediaLibraryWindow)); },
         ["mx-toggle-ai-subtitle"] = args => AiSubtitleWindow.ToggleInstance(),
+        ["mx-toggle-dual-sub"] = args => MxSubtitleSuite.ToggleDualSubtitles(),
+        ["mx-search-shooter-sub"] = args => System.Threading.Tasks.Task.Run(() => MxSubtitleSuite.SearchAndMountShooterSubtitlesAsync(Player.Path)),
         ["mx-toggle-night-mode"] = args => MxEnhancementManager.ToggleNightMode(),
         ["mx-toggle-sharpen"] = args => MxEnhancementManager.ToggleSharpen(),
         ["mx-toggle-vibrant"] = args => MxEnhancementManager.ToggleVibrantColor(),

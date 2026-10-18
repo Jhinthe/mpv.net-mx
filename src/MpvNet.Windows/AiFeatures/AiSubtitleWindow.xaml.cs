@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
@@ -150,5 +150,19 @@ public partial class AiSubtitleWindow : Window
             Clipboard.SetText(def.Word);
             MxEnhancementManager.ShowOsd($"🔍 [{def.Word}] {def.Phonetic} ({def.Pos}) {def.Meaning}");
         }
+    }
+
+    private void BtnSearchOnlineSub_Click(object sender, RoutedEventArgs e)
+    {
+        Task.Run(async () =>
+        {
+            await MxSubtitleSuite.SearchAndMountShooterSubtitlesAsync(Player.Path);
+            Dispatcher.BeginInvoke(new Action(() => UpdateCurrentDialogue()));
+        });
+    }
+
+    private void BtnDualSub_Click(object sender, RoutedEventArgs e)
+    {
+        MxSubtitleSuite.ToggleDualSubtitles();
     }
 }
