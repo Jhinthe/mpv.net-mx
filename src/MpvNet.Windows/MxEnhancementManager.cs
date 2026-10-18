@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using MpvNet;
 using static MpvNet.Global;
@@ -130,7 +130,7 @@ public static class MxEnhancementManager
         ShowOsd(MxI18n.T("OsdResetAll"), 2000);
     }
 
-    private static void ShowOsd(string text, int durationMs = 1500)
+    public static void ShowOsd(string text, int durationMs = 1500)
     {
         try
         {

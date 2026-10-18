@@ -26,6 +26,7 @@ public static class InputHelp
                 Add(b, new (_("Playback"), _("Stop"), "stop", "Ctrl+s"));
 
         Add(b, new ("⚡ MX 增强与画质神器", "📚 本地媒体库...", "script-message-to mpvnet mx-show-media-library", "Ctrl+l"));
+        Add(b, new ("⚡ MX 增强与画质神器", "📖 AI 外语字幕学习与查词助手", "script-message-to mpvnet mx-toggle-ai-subtitle", "Ctrl+Shift+D"));
         Add(b, new ("⚡ MX 增强与画质神器", "-"));
         Add(b, new ("⚡ MX 增强与画质神器", "🎧 夜间人声防扰 (人声对白增强)", "script-message-to mpvnet mx-toggle-night-mode", "n"));
         Add(b, new ("⚡ MX 增强与画质神器", "✨ 智能细节锐化 (自适应高清晰度)", "script-message-to mpvnet mx-toggle-sharpen", "u"));
