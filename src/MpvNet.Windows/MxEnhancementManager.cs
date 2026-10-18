@@ -116,6 +116,7 @@ public static class MxEnhancementManager
         try { Player.Command("af remove @mx_night"); } catch {}
         try { Player.Command("vf remove @mx_sharpen"); } catch {}
         try { Player.Command("vf remove @mx_anime"); } catch {}
+        try { AiFeatures.MxShaderManager.ApplyMode(AiFeatures.SuperResolutionMode.Off); } catch {}
 
         Player.SetPropertyInt("contrast", 0);
         Player.SetPropertyInt("saturation", 0);

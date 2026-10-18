@@ -36,6 +36,11 @@ public static class InputHelp
         Add(b, new ("⚡ MX 增强与画质神器", "📢 200% 超量音量增益", "script-message-to mpvnet mx-toggle-volume-boost", "b"));
         Add(b, new ("⚡ MX 增强与画质神器", "🌸 二次元动漫画质增强", "script-message-to mpvnet mx-toggle-anime"));
         Add(b, new ("⚡ MX 增强与画质神器", "-"));
+        Add(b, new ("⚡ MX 增强与画质神器", "🌸 Anime4K 动漫超分辨率 (模式A/B/C循环)", "script-message-to mpvnet mx-anime4k-cycle", "Ctrl+1"));
+        Add(b, new ("⚡ MX 增强与画质神器", "🎮 AMD FSR 高保真影视超分辨率", "script-message-to mpvnet mx-amd-fsr", "Ctrl+2"));
+        Add(b, new ("⚡ MX 增强与画质神器", "🎮 AMD CAS 对比度自适应微细节锐化", "script-message-to mpvnet mx-amd-cas", "Ctrl+3"));
+        Add(b, new ("⚡ MX 增强与画质神器", "🔄 清除所有超分辨率着色器", "script-message-to mpvnet mx-shaders-reset", "Ctrl+5"));
+        Add(b, new ("⚡ MX 增强与画质神器", "-"));
         Add(b, new ("⚡ MX 增强与画质神器", "🔄 一键复位所有画质增强", "script-message-to mpvnet mx-reset-enhancements", "Ctrl+0"));
 
         Add(b, new (_("Navigate"), _("Previous File"), "playlist-prev", "F11"));
