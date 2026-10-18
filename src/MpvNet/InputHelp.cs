@@ -28,6 +28,7 @@ public static class InputHelp
         Add(b, new ("⚡ MX 增强与画质神器", "📚 本地媒体库...", "script-message-to mpvnet mx-show-media-library", "Ctrl+l"));
         Add(b, new ("⚡ MX 增强与画质神器", "📌 极简无边框画中画 (置顶吸附)", "script-message-to mpvnet mx-toggle-pip", "P"));
         Add(b, new ("⚡ MX 增强与画质神器", "👻 切换画中画透明度 (摸鱼模式)", "script-message-to mpvnet mx-toggle-pip-transparency", "Ctrl+p"));
+        Add(b, new ("⚡ MX 增强与画质神器", "📱 手机无线遥控器 (扫码/网址)", "script-message-to mpvnet mx-show-web-remote", "Ctrl+r"));
         Add(b, new ("⚡ MX 增强与画质神器", "📖 AI 外语字幕学习与查词助手", "script-message-to mpvnet mx-toggle-ai-subtitle", "Ctrl+Shift+D"));
         Add(b, new ("⚡ MX 增强与画质神器", "🌐 开启/切换双字幕并显 (分层/堆叠)", "script-message-to mpvnet mx-toggle-dual-sub", "Shift+D"));
         Add(b, new ("⚡ MX 增强与画质神器", "🔍 射手在线字幕一键秒搜挂载...", "script-message-to mpvnet mx-search-shooter-sub", "Ctrl+Shift+S"));

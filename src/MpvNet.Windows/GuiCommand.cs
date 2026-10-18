@@ -51,6 +51,7 @@ public class GuiCommand
         ["mx-shaders-reset"] = args => MxShaderManager.ApplyMode(SuperResolutionMode.Off),
         ["mx-toggle-pip"] = args => MainForm.Instance?.TogglePipMode(),
         ["mx-toggle-pip-transparency"] = args => MainForm.Instance?.TogglePipTransparency(),
+        ["mx-show-web-remote"] = args => WebRemoteQrWindow.ShowInstance(),
         ["mx-reset-enhancements"] = args => MxEnhancementManager.ResetAll(),
         ["add-to-path"] = args => AddToPath(),
         ["edit-conf-file"] = EditCongFile,
