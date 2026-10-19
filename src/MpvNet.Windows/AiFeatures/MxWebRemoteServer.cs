@@ -78,7 +78,7 @@ public static class MxWebRemoteServer
             _listener.Start();
             _isRunning = true;
 
-            Task.Run(() => ListenLoopAsync(_cts.Token));
+            var _t1 = Task.Run(() => ListenLoopAsync(_cts.Token));
         }
         catch (Exception)
         {
@@ -96,7 +96,7 @@ public static class MxWebRemoteServer
                 }
                 _listener.Start();
                 _isRunning = true;
-                Task.Run(() => ListenLoopAsync(_cts!.Token));
+                var _t2 = Task.Run(() => ListenLoopAsync(_cts!.Token));
             }
             catch (Exception ex2)
             {
@@ -126,7 +126,7 @@ public static class MxWebRemoteServer
             try
             {
                 var context = await _listener.GetContextAsync();
-                Task.Run(() => HandleRequest(context));
+                var _tReq = Task.Run(() => HandleRequest(context));
             }
             catch when (token.IsCancellationRequested)
             {

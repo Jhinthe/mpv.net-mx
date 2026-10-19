@@ -83,10 +83,10 @@ public partial class AiSubtitleWindow : Window
             ItemsWordChips.ItemsSource = words;
 
             // 2. 异步翻译整句
-            Task.Run(async () =>
+            var _tSearch = Task.Run(async () =>
             {
                 string trans = await MxAiSubtitleAssistant.TranslateSentenceAsync(currentSub);
-                Dispatcher.BeginInvoke(new Action(() =>
+                var _op = Dispatcher.BeginInvoke(new Action(() =>
                 {
                     TxtTranslation.Text = trans;
                 }));
@@ -156,10 +156,10 @@ public partial class AiSubtitleWindow : Window
 
     private void BtnSearchOnlineSub_Click(object sender, RoutedEventArgs e)
     {
-        Task.Run(async () =>
+        var _tSearch = Task.Run(async () =>
         {
             await MxSubtitleSuite.SearchAndMountShooterSubtitlesAsync(Player.Path);
-            Dispatcher.BeginInvoke(new Action(() => UpdateCurrentDialogue()));
+            var _op = Dispatcher.BeginInvoke(new Action(() => UpdateCurrentDialogue()));
         });
     }
 
