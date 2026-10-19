@@ -1,140 +1,124 @@
 using System;
 using System.Diagnostics;
-using System.Drawing;
-using System.Drawing.Imaging;
 using System.IO;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
+using static MpvNet.Global;
 
 namespace MpvNet.Windows.AiFeatures;
 
 public partial class WebRemoteQrWindow : Window
 {
     private static WebRemoteQrWindow? _instance;
-    private readonly string _serverUrl;
 
     public WebRemoteQrWindow()
     {
         InitializeComponent();
+        Loaded += OnLoaded;
+        KeyDown += OnKeyDown;
+        Closing += OnClosing;
+    }
 
-        MxWebRemoteServer.StartServer();
-        _serverUrl = MxWebRemoteServer.GetServerUrl();
-        TxtUrl.Text = _serverUrl;
+    private void OnKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            Hide();
+            e.Handled = true;
+        }
+    }
 
-        GenerateAndSetQrCode(_serverUrl);
+    private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        e.Cancel = true;
+        Hide();
     }
 
     public static void ShowInstance()
     {
-        if (_instance == null || !_instance.IsLoaded)
+        if (_instance == null)
         {
             _instance = new WebRemoteQrWindow();
         }
 
+        if (!MxWebRemoteServer.IsRunning)
+        {
+            MxWebRemoteServer.StartServer();
+        }
+
+        _instance.RefreshQr();
         _instance.Show();
         _instance.Activate();
+        _instance.Focus();
     }
 
-    private void GenerateAndSetQrCode(string url)
+    private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        RefreshQr();
+    }
+
+    private void RefreshQr()
+    {
+        string localIp = MxWebRemoteServer.GetPrimaryLocalIp();
+        string url = $"http://{localIp}:{MxWebRemoteServer.Port}/";
+        TxtUrl.Text = url;
+
         try
         {
-            // 生成极简 21x21 QR 矩阵并绘制为黑白位图 (免外部 NuGet 依赖)
-            int size = 200;
-            using var bmp = new Bitmap(size, size);
-            using var g = Graphics.FromImage(bmp);
-            g.Clear(Color.White);
-
-            // 绘制寻像定位角标与指示图样
-            DrawQrPattern(g, url, size);
-
+            using var bmp = MxQrCode.GenerateBitmap(url, 240);
             using var ms = new MemoryStream();
-            bmp.Save(ms, ImageFormat.Png);
-            ms.Seek(0, SeekOrigin.Begin);
+            bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+            ms.Position = 0;
 
-            var bitmapImage = new BitmapImage();
-            bitmapImage.BeginInit();
-            bitmapImage.CacheOption = BitmapCacheOption.OnLoad;
-            bitmapImage.StreamSource = ms;
-            bitmapImage.EndInit();
-            bitmapImage.Freeze();
+            BitmapImage bi = new BitmapImage();
+            bi.BeginInit();
+            bi.CacheOption = BitmapCacheOption.OnLoad;
+            bi.StreamSource = ms;
+            bi.EndInit();
+            bi.Freeze();
 
-            ImgQrCode.Source = bitmapImage;
+            ImgQrCode.Source = bi;
         }
-        catch {}
-    }
-
-    private void DrawQrPattern(Graphics g, string text, int size)
-    {
-        using var blackBrush = new SolidBrush(Color.Black);
-        int border = 12;
-        int cellSize = (size - border * 2) / 25;
-
-        // 绘制标准 QR 的三个定位大方框 (左上、右上、左下)
-        DrawFinderPattern(g, border, border, cellSize);
-        DrawFinderPattern(g, size - border - cellSize * 7, border, cellSize);
-        DrawFinderPattern(g, border, size - border - cellSize * 7, cellSize);
-
-        // 依据 URL 的 Hash 编码点阵内容
-        byte[] hash = System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(text));
-        for (int r = 0; r < 25; r++)
+        catch (Exception ex)
         {
-            for (int c = 0; c < 25; c++)
-            {
-                // 跳过 3 个定位角
-                if ((r < 8 && c < 8) || (r < 8 && c > 16) || (r > 16 && c < 8))
-                    continue;
-
-                int bitIdx = (r * 25 + c) % (hash.Length * 8);
-                bool isDark = ((hash[bitIdx / 8] >> (bitIdx % 8)) & 1) == 1;
-
-                // 增加定时时钟黑白点
-                if (r == 6 || c == 6)
-                    isDark = (r + c) % 2 == 0;
-
-                if (isDark)
-                {
-                    g.FillRectangle(blackBrush, border + c * cellSize, border + r * cellSize, cellSize, cellSize);
-                }
-            }
+            Debug.WriteLine($"[WebRemoteQrWindow] 生成真实二维码失败: {ex.Message}");
         }
     }
 
-    private void DrawFinderPattern(Graphics g, int x, int y, int cellSize)
+    private void BtnClose_Click(object sender, RoutedEventArgs e)
     {
-        using var blackBrush = new SolidBrush(Color.Black);
-        using var whiteBrush = new SolidBrush(Color.White);
-
-        // 外层 7x7 黑框
-        g.FillRectangle(blackBrush, x, y, cellSize * 7, cellSize * 7);
-        // 中层 5x5 白框
-        g.FillRectangle(whiteBrush, x + cellSize, y + cellSize, cellSize * 5, cellSize * 5);
-        // 内层 3x3 黑心
-        g.FillRectangle(blackBrush, x + cellSize * 2, y + cellSize * 2, cellSize * 3, cellSize * 3);
+        Hide();
     }
 
     private void TxtUrl_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        try
-        {
-            Clipboard.SetText(_serverUrl);
-            MessageBox.Show("遥控网址已复制到剪贴板！", "mpv.net MX Player", MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-        catch {}
+        CopyUrl();
     }
 
     private void BtnOpenBrowser_Click(object sender, RoutedEventArgs e)
     {
         try
         {
-            Process.Start(new ProcessStartInfo(_serverUrl) { UseShellExecute = true });
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = TxtUrl.Text,
+                UseShellExecute = true
+            });
         }
-        catch {}
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[WebRemoteQrWindow] 打开浏览器失败: {ex.Message}");
+        }
     }
 
-    private void BtnClose_Click(object sender, RoutedEventArgs e)
+    private void CopyUrl()
     {
-        this.Close();
+        try
+        {
+            Clipboard.SetText(TxtUrl.Text);
+            Player.CommandV("show-text", "已复制遥控网址到剪贴板", "2000");
+        }
+        catch { }
     }
 }

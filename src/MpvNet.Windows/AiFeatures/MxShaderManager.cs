@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using MpvNet;
 using static MpvNet.Global;
@@ -120,5 +120,19 @@ public static class MxShaderManager
             ApplyMode(SuperResolutionMode.Off);
         else
             ApplyMode(SuperResolutionMode.AmdCas);
+    }
+    private static void SetShaders(params string[] shaders)
+    {
+        Player.CommandV("change-list", "glsl-shaders", "clr", "");
+        if (shaders != null)
+        {
+            foreach (var shader in shaders)
+            {
+                if (!string.IsNullOrWhiteSpace(shader))
+                {
+                    Player.CommandV("change-list", "glsl-shaders", "append", shader);
+                }
+            }
+        }
     }
 }

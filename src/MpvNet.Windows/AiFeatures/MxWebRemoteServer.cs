@@ -1,5 +1,4 @@
 ﻿using System;
-using MpvNet.Windows.WinForms;
 using System.IO;
 using System.Net;
 using System.Net.NetworkInformation;
@@ -23,7 +22,7 @@ public static class MxWebRemoteServer
     private static HttpListener? _listener;
     private static CancellationTokenSource? _cts;
     private static bool _isRunning = false;
-    private const int Port = 8999;
+    public const int Port = 8999;
 
     public static bool IsRunning => _isRunning;
 

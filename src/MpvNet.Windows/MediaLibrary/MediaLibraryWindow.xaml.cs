@@ -658,15 +658,16 @@ public partial class MediaLibraryWindow : Window
             }
 
             // 2. 调用播放器核心标准接口加载视频
-            Player.CommandV("loadfile", item.FilePath);
-
-            // 3. 毫秒级断点续播
+            // 2. 调用播放器核心标准接口加载视频（携带精确断点续播秒数无缝秒开）
             if (item.LastPosition > 5.0 && item.LastPosition < (item.DurationSeconds - 10.0))
             {
-                Player.CommandV("seek", item.LastPosition.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), "absolute");
+                string startSec = item.LastPosition.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+                Player.CommandV("loadfile", item.FilePath, "replace", "-1", $"start={startSec}");
             }
-
-            // 4. 播放器已就位后平滑隐藏媒体库
+            else
+            {
+                Player.CommandV("loadfile", item.FilePath);
+            }
             this.Hide();
         }
         catch (Exception ex)

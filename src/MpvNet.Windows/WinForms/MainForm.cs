@@ -1258,7 +1258,41 @@ public partial class MainForm : Form
                     m.Result = new IntPtr(1);
                 }
                 return;
+            case 0xA3: // WM_NCLBUTTONDBLCLK
+                if (_isPipMode)
+                {
+                    TogglePipMode();
+                    return;
+                }
+                break;
             case 0x84: // WM_NCHITTEST
+                if (_isPipMode)
+                {
+                    const int HTCAPTION = 2;
+                    const int HTLEFT = 10;
+                    const int HTRIGHT = 11;
+                    const int HTTOP = 12;
+                    const int HTTOPLEFT = 13;
+                    const int HTTOPRIGHT = 14;
+                    const int HTBOTTOM = 15;
+                    const int HTBOTTOMLEFT = 16;
+                    const int HTBOTTOMRIGHT = 17;
+                    int px = (short)(m.LParam.ToInt32() & 0xFFFF);
+                    int py = (short)(m.LParam.ToInt32() >> 16);
+                    Point ppt = PointToClient(new Point(px, py));
+                    Size pcs = ClientSize;
+                    int dist = 8;
+                    if (ppt.X >= pcs.Width - dist && ppt.Y >= pcs.Height - dist) m.Result = new IntPtr(HTBOTTOMRIGHT);
+                    else if (ppt.X <= dist && ppt.Y >= pcs.Height - dist) m.Result = new IntPtr(HTBOTTOMLEFT);
+                    else if (ppt.X <= dist && ppt.Y <= dist) m.Result = new IntPtr(HTTOPLEFT);
+                    else if (ppt.X >= pcs.Width - dist && ppt.Y <= dist) m.Result = new IntPtr(HTTOPRIGHT);
+                    else if (ppt.Y <= dist) m.Result = new IntPtr(HTTOP);
+                    else if (ppt.Y >= pcs.Height - dist) m.Result = new IntPtr(HTBOTTOM);
+                    else if (ppt.X <= dist) m.Result = new IntPtr(HTLEFT);
+                    else if (ppt.X >= pcs.Width - dist) m.Result = new IntPtr(HTRIGHT);
+                    else m.Result = new IntPtr(HTCAPTION);
+                    return;
+                }
                 // resize borderless window
                 if ((!Player.Border || !Player.TitleBar) && !Player.Fullscreen)
                 {

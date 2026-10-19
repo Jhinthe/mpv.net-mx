@@ -130,6 +130,13 @@ public class MxGestureController
 
     public void HandleMouseDown(Point clientPt)
     {
+        // 画中画模式下让位给窗口拖动与调整大小
+        if (WinForms.MainForm.Instance?.IsPipMode == true)
+        {
+            _currentMode = GestureMode.None;
+            return;
+        }
+
         // 底部 18% 区域为原生控制条与进度条，不启动全屏拖拽手势
         if ((double)clientPt.Y / Math.Max(1, _form.ClientSize.Height) > 0.82)
         {
@@ -272,9 +279,9 @@ public class MxGestureController
         }
         else
         {
-            Player.Command("cycle pause");
-            bool isPaused = Player.GetPropertyBool("pause");
-            ShowOsd(isPaused ? MxI18n.T("OsdPaused") : MxI18n.T("OsdPlaying"));
+            bool willPause = !Player.GetPropertyBool("pause");
+            Player.CommandV("cycle", "pause");
+            ShowOsd(willPause ? MxI18n.T("OsdPaused") : MxI18n.T("OsdPlaying"));
             return true;
         }
     }

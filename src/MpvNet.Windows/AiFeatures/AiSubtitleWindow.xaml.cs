@@ -19,6 +19,8 @@ public partial class AiSubtitleWindow : Window
     public AiSubtitleWindow()
     {
         InitializeComponent();
+        Closing += (s, e) => { e.Cancel = true; Hide(); };
+        KeyDown += (s, e) => { if (e.Key == System.Windows.Input.Key.Escape) { Hide(); e.Handled = true; } };
 
         _pollTimer = new DispatcherTimer
         {
