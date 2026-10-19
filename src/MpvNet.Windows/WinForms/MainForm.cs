@@ -777,6 +777,10 @@ public partial class MainForm : Form
 
     public void CycleFullscreen(bool enabled)
     {
+        if (_isPipMode)
+        {
+            TogglePipMode();
+        }
         _lastCycleFullscreen = Environment.TickCount;
         Player.Fullscreen = enabled;
 
@@ -897,6 +901,10 @@ public partial class MainForm : Form
 
     public void TogglePipMode()
     {
+        if (!_isPipMode && Player.Fullscreen)
+        {
+            CycleFullscreen(false);
+        }
         if (!_isPipMode)
         {
             _isPipMode = true;
@@ -1083,6 +1091,11 @@ public partial class MainForm : Form
                 }
             case 0x0202: // WM_LBUTTONUP
                 {
+                if (_isPipMode)
+                {
+                    m.Result = IntPtr.Zero;
+                    return;
+                }
                     Point pos = PointToClient(Cursor.Position);
                     if (_mxGesture != null && _mxGesture.HandleMouseUp(pos))
                     {
