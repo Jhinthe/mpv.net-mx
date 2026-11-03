@@ -15,6 +15,7 @@ public partial class AiSubtitleWindow : Window
     private static AiSubtitleWindow? _instance;
     private readonly DispatcherTimer _pollTimer;
     private string _lastSubtitleText = "";
+    private int _translationSeq; // 翻译时序号：慢网下旧句晚到结果不得覆盖新句
 
     public AiSubtitleWindow()
     {
@@ -82,13 +83,15 @@ public partial class AiSubtitleWindow : Window
             var words = MxAiSubtitleAssistant.AnalyzeWords(currentSub);
             ItemsWordChips.ItemsSource = words;
 
-            // 2. 异步翻译整句
+            // 2. 异步翻译整句（带时序防护）
+            int seq = ++_translationSeq;
             var _tSearch = Task.Run(async () =>
             {
                 string trans = await MxAiSubtitleAssistant.TranslateSentenceAsync(currentSub);
                 var _op = Dispatcher.BeginInvoke(new Action(() =>
                 {
-                    TxtTranslation.Text = trans;
+                    if (seq == _translationSeq)
+                        TxtTranslation.Text = trans;
                 }));
             });
         }

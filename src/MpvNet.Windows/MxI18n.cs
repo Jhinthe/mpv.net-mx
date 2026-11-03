@@ -84,16 +84,8 @@ public static class MxI18n
 
     static MxI18n()
     {
-        // 默认根据系统 UI 语言初始化
-        try
-        {
-            string twoLetter = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName.ToLowerInvariant();
-            CurrentLanguage = MxLanguage.Zh;
-        }
-        catch
-        {
-            CurrentLanguage = MxLanguage.Zh;
-        }
+        // 按产品要求所有设置默认中文
+        CurrentLanguage = MxLanguage.Zh;
     }
 
     public static string T(string key, params object[] args)

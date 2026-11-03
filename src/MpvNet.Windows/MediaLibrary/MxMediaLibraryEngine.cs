@@ -142,15 +142,21 @@ public class MxMediaLibraryEngine
         catch {}
     }
 
+    private readonly object _cacheWriteLock = new();
+
     public void SaveCache()
     {
-        try
+        // 串行化落盘：防止扫描线程与播放进度线程并发写同一文件导致缓存损坏/丢失
+        lock (_cacheWriteLock)
         {
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            string json = JsonSerializer.Serialize(AllItems.ToList(), options);
-            File.WriteAllText(CacheFilePath, json, Encoding.UTF8);
+            try
+            {
+                var options = new JsonSerializerOptions { WriteIndented = true };
+                string json = JsonSerializer.Serialize(AllItems.ToList(), options);
+                File.WriteAllText(CacheFilePath, json, Encoding.UTF8);
+            }
+            catch { }
         }
-        catch {}
     }
 
     public void RemoveItem(string filePath)

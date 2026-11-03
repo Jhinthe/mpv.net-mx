@@ -29,8 +29,11 @@ public class SubTrackInfo
 /// </summary>
 public static class MxSubtitleSuite
 {
-    private static readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(6) };
+    private static readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(4) };
     private static int _dualSubMode = 0; // 0=Off, 1=Split(Top/Bottom), 2=Stacked(Both Bottom)
+
+    /// <summary>换片时重置双字幕状态机（mpv 加载新文件会重置 secondary-sid）</summary>
+    public static void ResetForNewFile() => _dualSubMode = 0;
 
     /// <summary>
     /// 一键开启/切换双字幕并显模式 (Shift+D)
@@ -132,14 +135,21 @@ public static class MxSubtitleSuite
 
     private static bool IsChinese(SubTrackInfo t)
     {
-        string s = $"{t.Title} {t.Lang}".ToLowerInvariant();
-        return s.Contains("chi") || s.Contains("zh") || s.Contains("chs") || s.Contains("cht") || s.Contains("中文") || s.Contains("简") || s.Contains("繁");
+        string lang = (t.Lang ?? "").ToLowerInvariant();
+        if (lang.StartsWith("zh") || lang.StartsWith("chi") || lang.StartsWith("zho"))
+            return true;
+        string title = (t.Title ?? "").ToLowerInvariant();
+        return title.Contains("中文") || title.Contains("简") || title.Contains("繁")
+            || title.Contains("国语") || title.Contains("粤语") || title.Contains("chinese");
     }
 
     private static bool IsEnglish(SubTrackInfo t)
     {
-        string s = $"{t.Title} {t.Lang}".ToLowerInvariant();
-        return s.Contains("eng") || s.Contains("en") || s.Contains("英文") || s.Contains("english");
+        string lang = (t.Lang ?? "").ToLowerInvariant();
+        if (lang == "en" || lang == "eng" || lang.StartsWith("en-"))
+            return true;
+        string title = (t.Title ?? "").ToLowerInvariant();
+        return title.Contains("english") || title.Contains("英文");
     }
 
     /// <summary>
@@ -207,7 +217,7 @@ public static class MxSubtitleSuite
                 Content = new FormUrlEncodedContent(form)
             };
 
-            var resp = await _httpClient.SendAsync(req);
+            using var resp = await _httpClient.SendAsync(req);
             if (!resp.IsSuccessStatusCode)
             {
                 MxEnhancementManager.ShowOsd(MxI18n.CurrentLanguage == MxLanguage.Zh ? "⚠️ 在线字幕服务器响应超时" : "⚠️ Cloud subtitle timeout");

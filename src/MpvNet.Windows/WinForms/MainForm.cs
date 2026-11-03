@@ -49,6 +49,16 @@ public partial class MainForm : Form
     private MediaLibrary.MediaLibraryControl? _mediaLibraryControl;
     [DllImport("user32.dll")]
     private static extern bool ReleaseCapture();
+    [DllImport("user32.dll")]
+    private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+    [DllImport("user32.dll")]
+    private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+    [DllImport("user32.dll")]
+    private static extern bool SetLayeredWindowAttributes(IntPtr hWnd, uint crKey, byte bAlpha, uint dwFlags);
+
+    private const int GWL_EXSTYLE = -20;
+    private const int WS_EX_LAYERED = 0x00080000;
+    private const uint LWA_ALPHA = 2;
 
     private bool _isPipMode = false;
     private bool _pipTransparent = false;
@@ -56,8 +66,36 @@ public partial class MainForm : Form
     private FormWindowState _restoreWindowState;
     private FormBorderStyle _restoreBorderStyle;
     private bool _restoreTopMost;
+    private Point? _pipCaptionDownPt;          // PiP 标题区按下坐标（用于区分单击/拖动）
+    private long _pipClickPauseTicks;          // 单击暂停时间戳（双击退出画中画时回滚）
 
     public bool IsPipMode => _isPipMode;
+
+    /// <summary>
+    /// 对 mpv 子窗口（独立 HWND + D3D 交换链）施加分层透明。
+    /// Windows 8+ 支持子窗口 WS_EX_LAYERED，可让视频画面真正半透明（Form.Opacity 无法作用到子 HWND）。
+    /// </summary>
+    private void ApplyMpvChildAlpha(bool enable)
+    {
+        try
+        {
+            if (MpvWindowHandle == IntPtr.Zero)
+                MpvWindowHandle = FindWindowEx(Handle, IntPtr.Zero, "mpv", null);
+            if (MpvWindowHandle == IntPtr.Zero) return;
+
+            int ex = GetWindowLong(MpvWindowHandle, GWL_EXSTYLE);
+            if (enable)
+            {
+                SetWindowLong(MpvWindowHandle, GWL_EXSTYLE, ex | WS_EX_LAYERED);
+                SetLayeredWindowAttributes(MpvWindowHandle, 0, 153 /* ≈60% */, LWA_ALPHA);
+            }
+            else
+            {
+                SetWindowLong(MpvWindowHandle, GWL_EXSTYLE, ex & ~WS_EX_LAYERED);
+            }
+        }
+        catch { }
+    }
 
     public MainForm()
     {
@@ -925,13 +963,15 @@ public partial class MainForm : Form
             int margin = 24;
             this.SetBounds(workArea.Right - pipWidth - margin, workArea.Bottom - pipHeight - margin, pipWidth, pipHeight);
 
-            MxEnhancementManager.ShowOsd(MxI18n.CurrentLanguage == MxLanguage.Zh 
-                ? "📌 极简画中画模式 (已开启 - 按 P 退出，按 Ctrl+P 切换透明摸鱼)" 
-                : "📌 Picture-in-Picture [ON] (Press P to exit)");
+            MxEnhancementManager.ShowOsd(MxI18n.CurrentLanguage == MxLanguage.Zh
+                ? "📌 极简画中画模式 (已开启 - 按 P 退出，按 Ctrl+Alt+P 切换透明摸鱼)"
+                : "📌 Picture-in-Picture [ON] (Press P to exit, Ctrl+Alt+P for stealth)");
         }
         else
         {
             _isPipMode = false;
+            _pipTransparent = false;
+            ApplyMpvChildAlpha(false);
             this.Opacity = 1.0;
             this.FormBorderStyle = _restoreBorderStyle;
             this.TopMost = _restoreTopMost;
@@ -948,8 +988,8 @@ public partial class MainForm : Form
     {
         if (!_isPipMode) return;
         _pipTransparent = !_pipTransparent;
-        this.Opacity = _pipTransparent ? 0.60 : 1.0;
-        MxEnhancementManager.ShowOsd(MxI18n.CurrentLanguage == MxLanguage.Zh 
+        ApplyMpvChildAlpha(_pipTransparent);
+        MxEnhancementManager.ShowOsd(MxI18n.CurrentLanguage == MxLanguage.Zh
             ? (_pipTransparent ? "👻 画中画摸鱼透明度: 60% (半透明)" : "👻 画中画摸鱼透明度: 100% (不透明)")
             : (_pipTransparent ? "👻 PiP Opacity: 60%" : "👻 PiP Opacity: 100%"));
     }
@@ -957,6 +997,7 @@ public partial class MainForm : Form
     {
         BeginInvoke(() => {
             MediaLibrary.MediaLibraryWindow.HideInstance();
+            AiFeatures.MxSubtitleSuite.ResetForNewFile();
             this.Show();
             if (this.WindowState == FormWindowState.Minimized)
                 this.WindowState = FormWindowState.Normal;
@@ -1274,7 +1315,36 @@ public partial class MainForm : Form
             case 0xA3: // WM_NCLBUTTONDBLCLK
                 if (_isPipMode)
                 {
+                    // 双击退出画中画时，若首次单击刚触发了暂停则回滚，避免"双击退出却顺带暂停"
+                    if (_pipClickPauseTicks != 0 && Math.Abs(Environment.TickCount64 - _pipClickPauseTicks) < 400)
+                    {
+                        Player.CommandV("cycle", "pause");
+                        _pipClickPauseTicks = 0;
+                    }
                     TogglePipMode();
+                    return;
+                }
+                break;
+            case 0xA1: // WM_NCLBUTTONDOWN
+                if (_isPipMode && m.WParam.ToInt32() == 2 /* HTCAPTION */)
+                {
+                    _pipCaptionDownPt = Cursor.Position;
+                }
+                break;
+            case 0xA2: // WM_NCLBUTTONUP
+                if (_isPipMode && m.WParam.ToInt32() == 2 && _pipCaptionDownPt.HasValue)
+                {
+                    var downPt = _pipCaptionDownPt.Value;
+                    _pipCaptionDownPt = null;
+                    // 未发生拖动的"单击"→ 切换播放/暂停（画中画内 mpv 收不到客户区鼠标事件）
+                    if (Math.Abs(Cursor.Position.X - downPt.X) < 5 && Math.Abs(Cursor.Position.Y - downPt.Y) < 5)
+                    {
+                        bool willPause = !Player.GetPropertyBool("pause");
+                        Player.CommandV("cycle", "pause");
+                        _pipClickPauseTicks = Environment.TickCount64;
+                        MxEnhancementManager.ShowOsd(willPause ? MxI18n.T("OsdPaused") : MxI18n.T("OsdPlaying"));
+                    }
+                    m.Result = IntPtr.Zero;
                     return;
                 }
                 break;
@@ -1294,7 +1364,7 @@ public partial class MainForm : Form
                     int py = (short)(m.LParam.ToInt32() >> 16);
                     Point ppt = PointToClient(new Point(px, py));
                     Size pcs = ClientSize;
-                    int dist = 8;
+                    int dist = Math.Max(8, FontHeight / 3);
                     if (ppt.X >= pcs.Width - dist && ppt.Y >= pcs.Height - dist) m.Result = new IntPtr(HTBOTTOMRIGHT);
                     else if (ppt.X <= dist && ppt.Y >= pcs.Height - dist) m.Result = new IntPtr(HTBOTTOMLEFT);
                     else if (ppt.X <= dist && ppt.Y <= dist) m.Result = new IntPtr(HTTOPLEFT);

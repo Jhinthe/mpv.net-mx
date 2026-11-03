@@ -27,8 +27,8 @@ public static class InputHelp
 
         Add(b, new ("⚡ MX 增强与画质神器", "📚 本地媒体库...", "script-message-to mpvnet mx-show-media-library", "Ctrl+l"));
         Add(b, new ("⚡ MX 增强与画质神器", "📌 极简无边框画中画 (置顶吸附)", "script-message-to mpvnet mx-toggle-pip", "P"));
-        Add(b, new ("⚡ MX 增强与画质神器", "👻 切换画中画透明度 (摸鱼模式)", "script-message-to mpvnet mx-toggle-pip-transparency", "Ctrl+p"));
-        Add(b, new ("⚡ MX 增强与画质神器", "📱 手机无线遥控器 (扫码/网址)", "script-message-to mpvnet mx-show-web-remote", "Ctrl+r"));
+        Add(b, new ("⚡ MX 增强与画质神器", "👻 切换画中画透明度 (摸鱼模式)", "script-message-to mpvnet mx-toggle-pip-transparency", "Ctrl+Alt+p"));
+        Add(b, new ("⚡ MX 增强与画质神器", "📱 手机无线遥控器 (扫码/网址)", "script-message-to mpvnet mx-show-web-remote", "Ctrl+Alt+r"));
         Add(b, new ("⚡ MX 增强与画质神器", "📖 AI 外语字幕学习与查词助手", "script-message-to mpvnet mx-toggle-ai-subtitle", "Ctrl+Shift+D"));
         Add(b, new ("⚡ MX 增强与画质神器", "🌐 开启/切换双字幕并显 (分层/堆叠)", "script-message-to mpvnet mx-toggle-dual-sub", "Shift+D"));
         Add(b, new ("⚡ MX 增强与画质神器", "🔍 射手在线字幕一键秒搜挂载...", "script-message-to mpvnet mx-search-shooter-sub", "Ctrl+Shift+S"));
@@ -39,10 +39,10 @@ public static class InputHelp
         Add(b, new ("⚡ MX 增强与画质神器", "📢 200% 超量音量增益", "script-message-to mpvnet mx-toggle-volume-boost", "b"));
         Add(b, new ("⚡ MX 增强与画质神器", "🌸 二次元动漫画质增强", "script-message-to mpvnet mx-toggle-anime"));
         Add(b, new ("⚡ MX 增强与画质神器", "-"));
-        Add(b, new ("⚡ MX 增强与画质神器", "🌸 Anime4K 动漫超分辨率 (模式A/B/C循环)", "script-message-to mpvnet mx-anime4k-cycle", "Ctrl+1"));
-        Add(b, new ("⚡ MX 增强与画质神器", "🎮 AMD FSR 高保真影视超分辨率", "script-message-to mpvnet mx-amd-fsr", "Ctrl+2"));
-        Add(b, new ("⚡ MX 增强与画质神器", "🎮 AMD CAS 对比度自适应微细节锐化", "script-message-to mpvnet mx-amd-cas", "Ctrl+3"));
-        Add(b, new ("⚡ MX 增强与画质神器", "🔄 清除所有超分辨率着色器", "script-message-to mpvnet mx-shaders-reset", "Ctrl+5"));
+        Add(b, new ("⚡ MX 增强与画质神器", "🌸 Anime4K 动漫超分辨率 (模式A/B/C循环)", "script-message-to mpvnet mx-anime4k-cycle", "Ctrl+Alt+1"));
+        Add(b, new ("⚡ MX 增强与画质神器", "🎮 AMD FSR 高保真影视超分辨率", "script-message-to mpvnet mx-amd-fsr", "Ctrl+Alt+2"));
+        Add(b, new ("⚡ MX 增强与画质神器", "🎮 AMD CAS 对比度自适应微细节锐化", "script-message-to mpvnet mx-amd-cas", "Ctrl+Alt+3"));
+        Add(b, new ("⚡ MX 增强与画质神器", "🔄 清除所有超分辨率着色器", "script-message-to mpvnet mx-shaders-reset", "Ctrl+Alt+5"));
         Add(b, new ("⚡ MX 增强与画质神器", "-"));
         Add(b, new ("⚡ MX 增强与画质神器", "🔄 一键复位所有画质增强", "script-message-to mpvnet mx-reset-enhancements", "Ctrl+0"));
 

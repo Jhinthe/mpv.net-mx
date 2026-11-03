@@ -4,6 +4,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
+using QRCoder;
 using static MpvNet.Global;
 
 namespace MpvNet.Windows.AiFeatures;
@@ -60,18 +61,25 @@ public partial class WebRemoteQrWindow : Window
 
     private void RefreshQr()
     {
-        string localIp = MxWebRemoteServer.GetPrimaryLocalIp();
-        string url = $"http://{localIp}:{MxWebRemoteServer.Port}/";
-        TxtUrl.Text = url;
-
         try
         {
-            using var bmp = MxQrCode.GenerateBitmap(url, 240);
-            using var ms = new MemoryStream();
-            bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
-            ms.Position = 0;
+            if (!MxWebRemoteServer.IsRunning)
+            {
+                TxtUrl.Text = "⚠ 遥控服务启动失败（端口被占用或权限不足）";
+                ImgQrCode.Source = null;
+                return;
+            }
 
-            BitmapImage bi = new BitmapImage();
+            string url = MxWebRemoteServer.GetServerUrl();
+            TxtUrl.Text = url;
+
+            // QRCoder (MIT)：ISO/IEC 18004 全合规实现，任何手机相机/微信均可秒扫
+            using var generator = new QRCodeGenerator();
+            using var data = generator.CreateQrCode(url, QRCodeGenerator.ECCLevel.M);
+            var png = new PngByteQRCode(data).GetGraphic(pixelsPerModule: 8);
+
+            var bi = new BitmapImage();
+            using var ms = new MemoryStream(png);
             bi.BeginInit();
             bi.CacheOption = BitmapCacheOption.OnLoad;
             bi.StreamSource = ms;
@@ -82,7 +90,7 @@ public partial class WebRemoteQrWindow : Window
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[WebRemoteQrWindow] 生成真实二维码失败: {ex.Message}");
+            Debug.WriteLine($"[WebRemoteQrWindow] 生成二维码失败: {ex.Message}");
         }
     }
 
@@ -117,7 +125,7 @@ public partial class WebRemoteQrWindow : Window
         try
         {
             Clipboard.SetText(TxtUrl.Text);
-            Player.CommandV("show-text", "已复制遥控网址到剪贴板", "2000");
+            Player.CommandV("show-text", MxI18n.T("OsdCopied"), "2000");
         }
         catch { }
     }

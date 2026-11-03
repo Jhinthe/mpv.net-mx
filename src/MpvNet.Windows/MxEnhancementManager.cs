@@ -16,8 +16,9 @@ public static class MxEnhancementManager
     private static bool _volumeBoostActive = false;
     private static bool _animeModeActive = false;
 
-    private static int _origContrast = 0;
-    private static int _origSaturation = 0;
+    // 饱和度/对比度改用加法增量后不再使用恢复基准（保留占位避免外部引用断裂）
+    private const int _origContrast = 0;
+    private const int _origSaturation = 0;
 
     public static void ToggleNightMode()
     {
@@ -52,21 +53,12 @@ public static class MxEnhancementManager
     public static void ToggleVibrantColor()
     {
         _vibrantActive = !_vibrantActive;
-        if (_vibrantActive)
-        {
-            _origContrast = Player.GetPropertyInt("contrast");
-            _origSaturation = Player.GetPropertyInt("saturation");
-
-            Player.SetPropertyInt("contrast", Math.Clamp(_origContrast + 8, -100, 100));
-            Player.SetPropertyInt("saturation", Math.Clamp(_origSaturation + 15, -100, 100));
-            ShowOsd(MxI18n.T("OsdVibrantOn"), 2000);
-        }
-        else
-        {
-            Player.SetPropertyInt("contrast", _origContrast);
-            Player.SetPropertyInt("saturation", _origSaturation);
-            ShowOsd(MxI18n.T("OsdVibrantOff"), 1500);
-        }
+        // 加法式增量（开关顺序无关）：修复与动漫增强交叉开关时的饱和度漂移
+        int contrastDelta = _vibrantActive ? 8 : -8;
+        int saturationDelta = _vibrantActive ? 15 : -15;
+        Player.SetPropertyInt("contrast", Math.Clamp(Player.GetPropertyInt("contrast") + contrastDelta, -100, 100));
+        Player.SetPropertyInt("saturation", Math.Clamp(Player.GetPropertyInt("saturation") + saturationDelta, -100, 100));
+        ShowOsd(_vibrantActive ? MxI18n.T("OsdVibrantOn") : MxI18n.T("OsdVibrantOff"), _vibrantActive ? 2000 : 1500);
     }
 
     public static void ToggleVolumeBoost()
@@ -97,18 +89,12 @@ public static class MxEnhancementManager
     public static void ToggleAnimeMode()
     {
         _animeModeActive = !_animeModeActive;
-        if (_animeModeActive)
-        {
-            Player.Command("vf add @mx_anime:lavfi=[hqdn3d=1.5:1.5:4:4]");
-            Player.SetPropertyInt("saturation", Math.Clamp(Player.GetPropertyInt("saturation") + 12, -100, 100));
-            ShowOsd(MxI18n.T("OsdAnimeOn"), 2000);
-        }
-        else
-        {
-            Player.Command("vf remove @mx_anime");
-            Player.SetPropertyInt("saturation", Math.Clamp(Player.GetPropertyInt("saturation") - 12, -100, 100));
-            ShowOsd(MxI18n.T("OsdAnimeOff"), 1500);
-        }
+        Player.Command(_animeModeActive
+            ? "vf add @mx_anime:lavfi=[hqdn3d=1.5:1.5:4:4]"
+            : "vf remove @mx_anime");
+        int saturationDelta = _animeModeActive ? 12 : -12;
+        Player.SetPropertyInt("saturation", Math.Clamp(Player.GetPropertyInt("saturation") + saturationDelta, -100, 100));
+        ShowOsd(_animeModeActive ? MxI18n.T("OsdAnimeOn") : MxI18n.T("OsdAnimeOff"), _animeModeActive ? 2000 : 1500);
     }
 
     public static void ResetAll()

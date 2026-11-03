@@ -25,12 +25,14 @@ static class Program
 
             AppDomain.CurrentDomain.UnhandledException += (sender, e) => Terminal.WriteError(e.ExceptionObject);
             Application.ThreadException += (sender, e) => {
-    try { System.IO.File.WriteAllText(@"J:\mpv.net\crash_details.txt", e.Exception.ToString()); } catch {}
+    WriteCrashDetails(e.Exception.ToString());
     Terminal.WriteError(e.Exception);
 };
 AppDomain.CurrentDomain.UnhandledException += (sender, e) => {
-    try { System.IO.File.WriteAllText(@"J:\mpv.net\crash_details.txt", e.ExceptionObject.ToString()); } catch {}
+    WriteCrashDetails(e.ExceptionObject.ToString() ?? "unknown exception");
 };
+
+            if (App.IsTerminalAttached)
 
             if (App.IsTerminalAttached)
                 WinApi.AttachConsole(-1 /*ATTACH_PARENT_PROCESS*/);
@@ -126,6 +128,18 @@ AppDomain.CurrentDomain.UnhandledException += (sender, e) => {
         {
             Terminal.WriteError(ex);
         }
+    }
+
+    static void WriteCrashDetails(string content)
+    {
+        try
+        {
+            string dir = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "mpv.net");
+            System.IO.Directory.CreateDirectory(dir);
+            System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "crash_details.txt"), content);
+        }
+        catch { }
     }
 
     static bool ProcessCommandLineArguments()

@@ -1,5 +1,8 @@
-﻿using System;
+using System;
+using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
@@ -16,6 +19,7 @@ namespace MpvNet.Windows.AiFeatures;
 /// <summary>
 /// 方向六：手机局域网无线遥控器 Web 服务端
 /// 零依赖内嵌 HttpListener，提供现代触摸手势遥控网页与媒体库点播 API
+/// 安全：每次启动随机 6 位访问密钥（二维码 URL 携带 ?k=），无密钥请求一律 403
 /// </summary>
 public static class MxWebRemoteServer
 {
@@ -24,10 +28,54 @@ public static class MxWebRemoteServer
     private static bool _isRunning = false;
     public const int Port = 8999;
 
+    /// <summary>本次运行的访问密钥（防止局域网内任意设备未授权操控）</summary>
+    public static int AccessKey { get; private set; }
+
     public static bool IsRunning => _isRunning;
 
     public static string GetPrimaryLocalIp()
     {
+        // 1. 网卡枚举优先：过滤 TUN Fake-IP(198.18.0.0/15)、CGNAT/Tailscale(100.64.0.0/10)、链路本地与回环，
+        //    优先选择带 IPv4 默认网关的物理网卡 —— 修复 FlClash TUN 等代理环境下二维码 IP 错误问题
+        try
+        {
+            var candidates = new List<(IPAddress Ip, bool HasGateway)>();
+            foreach (var ni in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (ni.OperationalStatus != OperationalStatus.Up ||
+                    ni.NetworkInterfaceType == NetworkInterfaceType.Loopback)
+                    continue;
+
+                var props = ni.GetIPProperties();
+                bool hasGateway = props.GatewayAddresses
+                    .Any(g => g.Address != null && g.Address.AddressFamily == AddressFamily.InterNetwork);
+
+                foreach (var ip in props.UnicastAddresses)
+                {
+                    if (ip.Address.AddressFamily != AddressFamily.InterNetwork || IPAddress.IsLoopback(ip.Address))
+                        continue;
+
+                    string s = ip.Address.ToString();
+                    if (s.StartsWith("169.254.") || s.StartsWith("198.18.") || s.StartsWith("198.19."))
+                        continue;
+                    if (s.StartsWith("100."))
+                    {
+                        string[] octets = s.Split('.');
+                        if (octets.Length > 1 && int.TryParse(octets[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out int o2)
+                            && o2 >= 64 && o2 <= 127)
+                            continue; // 100.64.0.0/10 (Tailscale/CGNAT)
+                    }
+                    candidates.Add((ip.Address, hasGateway));
+                }
+            }
+
+            var best = candidates.OrderByDescending(c => c.HasGateway).FirstOrDefault();
+            if (best.Ip != null)
+                return best.Ip.ToString();
+        }
+        catch { }
+
+        // 2. 兜底：路由探测（仅在网卡枚举无结果时使用；注意可能命中 TUN 适配器）
         try
         {
             using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, 0);
@@ -36,49 +84,30 @@ public static class MxWebRemoteServer
             if (endPoint != null && !IPAddress.IsLoopback(endPoint.Address))
                 return endPoint.Address.ToString();
         }
-        catch {}
-
-        try
-        {
-            foreach (var ni in NetworkInterface.GetAllNetworkInterfaces())
-            {
-                if (ni.OperationalStatus != OperationalStatus.Up || ni.NetworkInterfaceType == NetworkInterfaceType.Loopback)
-                    continue;
-
-                foreach (var ip in ni.GetIPProperties().UnicastAddresses)
-                {
-                    if (ip.Address.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(ip.Address))
-                    {
-                        string str = ip.Address.ToString();
-                        if (!str.StartsWith("169.254"))
-                            return str;
-                    }
-                }
-            }
-        }
-        catch {}
+        catch { }
 
         return "127.0.0.1";
     }
 
     public static string GetServerUrl()
     {
-        return $"http://{GetPrimaryLocalIp()}:{Port}/";
+        return $"http://{GetPrimaryLocalIp()}:{Port}/?k={AccessKey.ToString(CultureInfo.InvariantCulture)}";
     }
 
     public static void StartServer()
     {
         if (_isRunning) return;
 
+        AccessKey = Random.Shared.Next(100000, 999999);
+        _cts = new CancellationTokenSource();
+        _listener = new HttpListener();
+        bool anyBound = false;
+
         try
         {
-            _cts = new CancellationTokenSource();
-            _listener = new HttpListener();
             _listener.Prefixes.Add($"http://*:{Port}/");
             _listener.Start();
-            _isRunning = true;
-
-            var _t1 = Task.Run(() => ListenLoopAsync(_cts.Token));
+            anyBound = true;
         }
         catch (Exception)
         {
@@ -92,17 +121,26 @@ public static class MxWebRemoteServer
                 string localIp = GetPrimaryLocalIp();
                 if (localIp != "127.0.0.1")
                 {
-                    _listener.Prefixes.Add($"http://{localIp}:{Port}/");
+                    try { _listener.Prefixes.Add($"http://{localIp}:{Port}/"); } catch { }
                 }
                 _listener.Start();
-                _isRunning = true;
-                var _t2 = Task.Run(() => ListenLoopAsync(_cts!.Token));
+                anyBound = true;
             }
             catch (Exception ex2)
             {
                 Terminal.WriteError(ex2);
-                _isRunning = false;
+                anyBound = false;
             }
+        }
+
+        if (anyBound && _listener != null && _listener.IsListening)
+        {
+            _isRunning = true;
+            var _t1 = Task.Run(() => ListenLoopAsync(_cts.Token));
+        }
+        else
+        {
+            _isRunning = false;
         }
     }
 
@@ -116,7 +154,7 @@ public static class MxWebRemoteServer
             _listener?.Stop();
             _listener?.Close();
         }
-        catch {}
+        catch { }
     }
 
     private static async Task ListenLoopAsync(CancellationToken token)
@@ -128,13 +166,13 @@ public static class MxWebRemoteServer
                 var context = await _listener.GetContextAsync();
                 var _tReq = Task.Run(() => HandleRequest(context));
             }
-            catch when (token.IsCancellationRequested)
+            catch (Exception) when (token.IsCancellationRequested)
             {
                 break;
             }
             catch (Exception)
             {
-                await Task.Delay(100, token);
+                try { await Task.Delay(100, token); } catch { }
             }
         }
     }
@@ -144,7 +182,6 @@ public static class MxWebRemoteServer
         var req = ctx.Request;
         var res = ctx.Response;
 
-        // CORS 允许
         res.Headers.Add("Access-Control-Allow-Origin", "*");
         res.Headers.Add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
         res.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
@@ -152,6 +189,15 @@ public static class MxWebRemoteServer
         if (req.HttpMethod == "OPTIONS")
         {
             res.StatusCode = 204;
+            res.Close();
+            return;
+        }
+
+        // 访问鉴权：二维码 URL 携带 ?k=<AccessKey>，无密钥/密钥错误一律 403
+        string? qk = req.QueryString["k"];
+        if (qk != AccessKey.ToString(CultureInfo.InvariantCulture))
+        {
+            res.StatusCode = 403;
             res.Close();
             return;
         }
@@ -169,11 +215,16 @@ public static class MxWebRemoteServer
             }
             else if (path == "/api/status")
             {
+                string title = Player.GetPropertyString("media-title");
+                if (string.IsNullOrEmpty(title))
+                    title = string.IsNullOrEmpty(Player.Path) ? "就绪 / 空闲中" : Path.GetFileName(Player.Path);
+
+                bool idle = Player.GetPropertyBool("idle-active");
                 var status = new
                 {
-                    playing = !Player.GetPropertyBool("pause"),
-                    path = Player.Path,
-                    title = Player.GetPropertyString("media-title") ?? Path.GetFileName(Player.Path),
+                    playing = !Player.GetPropertyBool("pause") && !idle,
+                    path = Player.Path ?? "",
+                    title = title,
                     time = Player.GetPropertyDouble("time-pos"),
                     duration = Player.Duration.TotalSeconds,
                     volume = Player.GetPropertyDouble("volume"),
@@ -189,7 +240,7 @@ public static class MxWebRemoteServer
             {
                 using var reader = new StreamReader(req.InputStream, req.ContentEncoding);
                 string body = reader.ReadToEnd();
-                var doc = JsonDocument.Parse(body);
+                using var doc = JsonDocument.Parse(body);
                 string action = doc.RootElement.GetProperty("action").GetString() ?? "";
 
                 switch (action)
@@ -199,11 +250,11 @@ public static class MxWebRemoteServer
                         break;
                     case "seek":
                         double val = doc.RootElement.GetProperty("value").GetDouble();
-                        Player.CommandV("seek", val.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                        Player.CommandV("seek", val.ToString(CultureInfo.InvariantCulture));
                         break;
                     case "volume":
                         double volDelta = doc.RootElement.GetProperty("value").GetDouble();
-                        Player.CommandV("add", "volume", volDelta.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                        Player.CommandV("add", "volume", volDelta.ToString(CultureInfo.InvariantCulture));
                         break;
                     case "fullscreen":
                         Player.CommandV("cycle", "fullscreen");
@@ -226,7 +277,8 @@ public static class MxWebRemoteServer
                 }
 
                 byte[] ok = Encoding.UTF8.GetBytes("{\"success\":true}");
-                res.ContentType = "application/json";
+                res.ContentType = "application/json; charset=utf-8";
+                res.ContentLength64 = ok.Length;
                 res.OutputStream.Write(ok, 0, ok.Length);
             }
             else
@@ -236,13 +288,19 @@ public static class MxWebRemoteServer
         }
         catch (Exception ex)
         {
-            res.StatusCode = 500;
-            byte[] err = Encoding.UTF8.GetBytes(ex.Message);
-            res.OutputStream.Write(err, 0, err.Length);
+            try
+            {
+                res.StatusCode = 500;
+                byte[] err = Encoding.UTF8.GetBytes(ex.Message);
+                res.ContentType = "text/plain; charset=utf-8";
+                res.ContentLength64 = err.Length;
+                res.OutputStream.Write(err, 0, err.Length);
+            }
+            catch { }
         }
         finally
         {
-            res.Close();
+            try { res.Close(); } catch { }
         }
     }
 
@@ -330,6 +388,7 @@ public static class MxWebRemoteServer
 <div class=""sub-box"" id=""subText"">当前无字幕</div>
 
 <script>
+const K = new URLSearchParams(location.search).get('k') || '';
 let startX = 0, startY = 0;
 const pad = document.getElementById('touchPad');
 
@@ -356,7 +415,7 @@ pad.addEventListener('touchend', e => {
 }, {passive:true});
 
 function sendCmd(action, value = 0) {
-  fetch('/api/cmd', {
+  fetch('/api/cmd?k=' + K, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action, value })
@@ -365,14 +424,15 @@ function sendCmd(action, value = 0) {
 
 function formatTime(s) {
   if (!s || s <= 0) return '00:00';
-  const m = Math.floor(s / 60);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
   const sec = Math.floor(s % 60);
-  return String(m).padStart(2,'0') + ':' + String(sec).padStart(2,'0');
+  return (h > 0 ? h + ':' + String(m).padStart(2,'0') : String(m).padStart(2,'0')) + ':' + String(sec).padStart(2,'0');
 }
 
 setInterval(async () => {
   try {
-    const res = await fetch('/api/status');
+    const res = await fetch('/api/status?k=' + K);
     const data = await res.json();
     document.getElementById('mediaTitle').innerText = data.title || '空闲待命中';
     document.getElementById('timePos').innerText = formatTime(data.time);

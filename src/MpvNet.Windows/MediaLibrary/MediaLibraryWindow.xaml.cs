@@ -308,6 +308,8 @@ public partial class MediaLibraryWindow : Window
 
                     Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(() =>
                     {
+                        // 期间若列表已被再次刷新，旧批次成为孤儿集合，直接放弃补载
+                        if (!ReferenceEquals(ItemsVideosGrid.ItemsSource, initialBatch)) return;
                         for (int k = 36; k < videos.Count; k++)
                         {
                             initialBatch.Add(videos[k]);
