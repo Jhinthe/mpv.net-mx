@@ -45,8 +45,6 @@ public partial class MainForm : Form
     bool _maxSizeSet;
     bool _isCursorVisible = true;
         MxGestureController? _mxGesture;
-    private System.Windows.Forms.Integration.ElementHost? _mediaLibraryHost;
-    private MediaLibrary.MediaLibraryControl? _mediaLibraryControl;
     [DllImport("user32.dll")]
     private static extern bool ReleaseCapture();
     [DllImport("user32.dll")]
@@ -1644,74 +1642,13 @@ public partial class MainForm : Form
         StrongReferenceMessenger.Default.Send(new MainWindowIsLoadedMessage());
         WasShown = true;
     }
-    public void InitMediaLibraryHost()
-    {
-        try
-        {
-            _mediaLibraryControl = new MediaLibrary.MediaLibraryControl();
-            _mediaLibraryControl.RequestPlay += MediaLibrary_RequestPlay;
-            _mediaLibraryControl.RequestClose += MediaLibrary_RequestClose;
-
-            _mediaLibraryHost = new System.Windows.Forms.Integration.ElementHost
-            {
-                Dock = DockStyle.Fill,
-                Child = _mediaLibraryControl,
-                Visible = false
-            };
-
-            Controls.Add(_mediaLibraryHost);
-            _mediaLibraryHost.BringToFront();
-
-            // 如果启动时未打开特定视频文件（即单纯双击播放器图标进入，处于空闲模式），直接在同一窗口中先显示媒体库！
-            if (string.IsNullOrEmpty(Player.Path) && Player.PlaylistPos < 0)
-            {
-                ShowMediaLibrary();
-            }
-        }
-        catch {}
-    }
-
+    /// <summary>
+    /// 打开本地媒体库（统一入口）：无论主窗当前是否可见，一律路由到独立媒体库窗口，
+    /// 修复 Ctrl+l / 菜单 / 龙祥助手在空闲独立窗口模式下完全无响应的问题
+    /// </summary>
     public void ShowMediaLibrary()
     {
-        BeginInvoke(() => {
-            if (_mediaLibraryHost != null)
-            {
-                bool hasMedia = !string.IsNullOrEmpty(Player.Path);
-                _mediaLibraryControl?.SetPlayingState(hasMedia);
-                _mediaLibraryControl?.RefreshViews();
-                _mediaLibraryHost.Visible = true;
-                _mediaLibraryHost.BringToFront();
-                _mediaLibraryHost.Focus();
-            }
-        });
-    }
-
-    public void HideMediaLibrary()
-    {
-        BeginInvoke(() => {
-            if (_mediaLibraryHost != null && _mediaLibraryHost.Visible)
-            {
-                _mediaLibraryHost.Visible = false;
-                Focus();
-            }
-        });
-    }
-
-    private void MediaLibrary_RequestPlay(string filePath, double lastPosition)
-    {
-        BeginInvoke(() => {
-            HideMediaLibrary();
-            Player.CommandV("loadfile", filePath);
-            if (lastPosition > 5.0 && lastPosition < (Player.Duration.TotalSeconds - 10.0))
-            {
-                Player.CommandV("seek", lastPosition.ToString(CultureInfo.InvariantCulture), "absolute", "exact");
-            }
-        });
-    }
-
-    private void MediaLibrary_RequestClose()
-    {
-        HideMediaLibrary();
+        BeginInvoke(() => MediaLibrary.MediaLibraryWindow.ShowInstance());
     }
 
     void ContextMenu_Closed(object sender, System.Windows.RoutedEventArgs e) => MenuAutoResetEvent.Set();

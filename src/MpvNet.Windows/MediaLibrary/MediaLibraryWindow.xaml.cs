@@ -114,7 +114,7 @@ public partial class MediaLibraryWindow : Window
         UpdateI18nTexts();
         RefreshViews();
 
-        if (_engine.AllItems.Count == 0 && !_engine.IsScanning)
+        if (_engine.ItemCount == 0 && !_engine.IsScanning)
         {
             var scanTask = _engine.ScanAsync();
         }
@@ -272,7 +272,7 @@ public partial class MediaLibraryWindow : Window
 
     private void RefreshViews()
     {
-        var all = _engine.AllItems.ToList();
+        var all = _engine.GetItemsSnapshot();
 
         // 文件夹深入过滤
         if (_activeFolderPath != null)
@@ -478,7 +478,7 @@ public partial class MediaLibraryWindow : Window
     {
         using var dlg = new System.Windows.Forms.FolderBrowserDialog
         {
-            Description = "选择要加入 MX 媒体库的影视或音乐文件夹",
+            Description = MxI18n.T("AddFolderDesc"),
             UseDescriptionForTitle = true,
             ShowNewFolderButton = false
         };
@@ -606,7 +606,14 @@ public partial class MediaLibraryWindow : Window
         var item = GetContextMediaItem(sender);
         if (item != null)
         {
-            Clipboard.SetText(item.FilePath);
+            try
+            {
+                Clipboard.SetText(item.FilePath);
+            }
+            catch
+            {
+                MxEnhancementManager.ShowOsd(MxI18n.T("CopyFailed"));
+            }
         }
     }
 
@@ -639,24 +646,29 @@ public partial class MediaLibraryWindow : Window
         try
         {
             // 1. 先安全还原并呈现主播放器窗口，杜绝黑屏或窗口全隐引发的假闪退
+            //    （Invoke 本身可能因句柄未建/已释放抛出 —— 拦截之，绝不让它阻断随后的 loadfile）
             if (MainForm.Instance != null)
             {
-                MainForm.Instance.Invoke(new Action(() =>
+                try
                 {
-                    try
+                    MainForm.Instance.Invoke(new Action(() =>
                     {
-                        MainForm.Instance.Show();
-                        MainForm.Instance.Visible = true;
-                        if (MainForm.Instance.WindowState == System.Windows.Forms.FormWindowState.Minimized)
+                        try
                         {
-                            MainForm.Instance.WindowState = System.Windows.Forms.FormWindowState.Normal;
+                            MainForm.Instance.Show();
+                            MainForm.Instance.Visible = true;
+                            if (MainForm.Instance.WindowState == System.Windows.Forms.FormWindowState.Minimized)
+                            {
+                                MainForm.Instance.WindowState = System.Windows.Forms.FormWindowState.Normal;
+                            }
+                            MainForm.Instance.BringToFront();
+                            MainForm.Instance.Activate();
+                            SetForegroundWindow(MainForm.Instance.Handle);
                         }
-                        MainForm.Instance.BringToFront();
-                        MainForm.Instance.Activate();
-                        SetForegroundWindow(MainForm.Instance.Handle);
-                    }
-                    catch {}
-                }));
+                        catch { }
+                    }));
+                }
+                catch { }
             }
 
             // 2. 调用播放器核心标准接口加载视频

@@ -76,7 +76,8 @@ public static class MxEnhancementManager
         }
         else
         {
-            Player.SetPropertyDouble("volume-max", 100.0);
+            // 130.0 = mpv 上游默认音量上限（冷启动基线），确保关闭增益后与初始状态一致
+            Player.SetPropertyDouble("volume-max", 130.0);
             double currentVol = Player.GetPropertyDouble("volume");
             if (currentVol > 100.0)
             {

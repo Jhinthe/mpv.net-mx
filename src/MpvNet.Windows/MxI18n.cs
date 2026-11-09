@@ -77,6 +77,8 @@ public static class MxI18n
         ["OsdAnimeOff"] = ("🌸  二次元动漫增强: [已关闭]", "🌸  Anime Enhancement: [OFF]"),
         ["OsdResetAll"] = ("🔄  已重置所有画质与音质增强", "🔄  All enhancements have been reset"),
         ["OsdCopied"] = ("📋  已复制遥控网址到剪贴板", "📋  Remote URL copied to clipboard"),
+        ["AddFolderDesc"] = ("选择要加入 MX 媒体库的影视或音乐文件夹", "Pick a movie or music folder for the MX library"),
+        ["CopyFailed"] = ("⚠  剪贴板被占用，复制失败", "⚠  Clipboard busy, copy failed"),
         ["OsdSubScale"] = ("🔤  字幕字号: {0}%", "🔤  Subtitle Font Size: {0}%"),
         ["OsdSubPos"] = ("↕  字幕垂直位置: {0}%", "↕  Subtitle Vertical Position: {0}%"),
         ["OsdSubDelay"] = ("⏱  字幕时间轴校准: {0}{1:F1}s", "⏱  Subtitle Sync Calibration: {0}{1:F1}s")

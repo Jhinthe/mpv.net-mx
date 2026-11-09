@@ -92,6 +92,27 @@ public class MxMediaLibraryEngine
     public ObservableCollection<MediaItem> AllItems { get; } = [];
     public ObservableCollection<FolderItem> Folders { get; } = [];
 
+    /// <summary>跨线程读写 AllItems 的统一闸门（扫描/进度/移除/快照均经此锁，杜绝并发枚举崩溃）</summary>
+    private readonly object _itemsGate = new();
+
+    /// <summary>缓存文件 schema 版本（v2 引入 {version, items} 包裹结构，v1 为裸数组仍可读）</summary>
+    private const int CacheSchemaVersion = 2;
+
+    /// <summary>线程安全的只读快照（供 UI RefreshViews 等外部消费）</summary>
+    public List<MediaItem> GetItemsSnapshot()
+    {
+        lock (_itemsGate)
+        {
+            return AllItems.ToList();
+        }
+    }
+
+    /// <summary>当前条目数（线程安全）</summary>
+    public int ItemCount
+    {
+        get { lock (_itemsGate) return AllItems.Count; }
+    }
+
     public static MxMediaLibraryEngine Instance { get; } = new();
 
     private string CacheFilePath => Path.Combine(Player.ConfigFolder, "media_library_cache.json");
@@ -115,6 +136,12 @@ public class MxMediaLibraryEngine
         LoadCache();
     }
 
+    private sealed class CacheFile
+    {
+        public int Version { get; set; } = CacheSchemaVersion;
+        public List<MediaItem> Items { get; set; } = [];
+    }
+
     public void LoadCache()
     {
         try
@@ -122,24 +149,46 @@ public class MxMediaLibraryEngine
             if (!File.Exists(CacheFilePath)) return;
 
             string json = File.ReadAllText(CacheFilePath, Encoding.UTF8);
-            var items = JsonSerializer.Deserialize<List<MediaItem>>(json);
-            if (items != null && items.Count > 0)
+            List<MediaItem>? items = null;
+            bool isLegacyFormat = false;
+
+            // v2 包裹结构 {version, items}；v1 裸数组向后兼容（读入后立即迁移为 v2）
+            try
             {
-                AllItems.Clear();
-                foreach (var it in items)
+                var cacheFile = JsonSerializer.Deserialize<CacheFile>(json);
+                if (cacheFile?.Items is { Count: > 0 })
+                    items = cacheFile.Items;
+            }
+            catch
+            {
+                try
                 {
-                    if (File.Exists(it.FilePath) && !IsJunkMedia(it.FilePath))
-                        if (it.DurationSeconds > 0 && (string.IsNullOrEmpty(it.DurationString) || it.DurationString == "--:--"))
-                        {
-                            it.DurationString = FormatTime(it.DurationSeconds);
-                        }
-                        AllItems.Add(it);
+                    items = JsonSerializer.Deserialize<List<MediaItem>>(json);
+                    isLegacyFormat = items is { Count: > 0 };
+                }
+                catch { }
+            }
+
+            if (items is { Count: > 0 })
+            {
+                lock (_itemsGate)
+                {
+                    AllItems.Clear();
+                    foreach (var it in items)
+                    {
+                        if (File.Exists(it.FilePath) && !IsJunkMedia(it.FilePath))
+                            if (it.DurationSeconds > 0 && (string.IsNullOrEmpty(it.DurationString) || it.DurationString == "--:--"))
+                            {
+                                it.DurationString = FormatTime(it.DurationSeconds);
+                            }
+                            AllItems.Add(it);
+                    }
                 }
                 RebuildFolders();
-                if (items.Count != AllItems.Count) SaveCache();
+                if (isLegacyFormat || items.Count != ItemCount) SaveCache();
             }
         }
-        catch {}
+        catch { }
     }
 
     private readonly object _cacheWriteLock = new();
@@ -151,9 +200,14 @@ public class MxMediaLibraryEngine
         {
             try
             {
+                List<MediaItem> snapshot;
+                lock (_itemsGate)
+                {
+                    snapshot = AllItems.ToList();
+                }
                 var options = new JsonSerializerOptions { WriteIndented = true };
-                string json = JsonSerializer.Serialize(AllItems.ToList(), options);
-                File.WriteAllText(CacheFilePath, json, Encoding.UTF8);
+                string json = JsonSerializer.Serialize(new CacheFile { Items = snapshot }, options);
+                File.WriteAllText(CacheFilePath, json, new UTF8Encoding(false));
             }
             catch { }
         }
@@ -163,10 +217,18 @@ public class MxMediaLibraryEngine
     {
         Action act = () =>
         {
-            var target = AllItems.FirstOrDefault(it => string.Equals(it.FilePath, filePath, StringComparison.OrdinalIgnoreCase));
-            if (target != null)
+            bool removed = false;
+            lock (_itemsGate)
             {
-                AllItems.Remove(target);
+                var target = AllItems.FirstOrDefault(it => string.Equals(it.FilePath, filePath, StringComparison.OrdinalIgnoreCase));
+                if (target != null)
+                {
+                    AllItems.Remove(target);
+                    removed = true;
+                }
+            }
+            if (removed)
+            {
                 RebuildFolders();
                 SaveCache();
                 ItemsChanged?.Invoke();
@@ -206,7 +268,11 @@ public class MxMediaLibraryEngine
 
                 int total = foundFiles.Count;
                 int current = 0;
-                var existingMap = AllItems.ToDictionary(it => it.FilePath, StringComparer.OrdinalIgnoreCase);
+                Dictionary<string, MediaItem> existingMap;
+                lock (_itemsGate)
+                {
+                    existingMap = AllItems.ToDictionary(it => it.FilePath, StringComparer.OrdinalIgnoreCase);
+                }
                 var newItems = new ConcurrentBag<MediaItem>();
 
                                 var parseOptions = new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount / 2, 2, 4) };
@@ -249,14 +315,22 @@ public class MxMediaLibraryEngine
 
                 System.Windows.Application.Current?.Dispatcher.Invoke(() =>
                 {
-                    AllItems.Clear();
-                    foreach (var it in sorted)
-                        AllItems.Add(it);
+                    lock (_itemsGate)
+                    {
+                        AllItems.Clear();
+                        foreach (var it in sorted)
+                            AllItems.Add(it);
+                    }
 
                     RebuildFolders();
                 });
 
                 SaveCache();
+            }
+            catch (Exception ex)
+            {
+                // 扫描异常不得静默：落终端（调试模式可见），并保证 finally 复位扫描状态
+                Terminal.WriteError(ex);
             }
             finally
             {
@@ -276,45 +350,59 @@ public class MxMediaLibraryEngine
 
         await Task.Run(() =>
         {
-            foreach (var p in paths)
+            try
             {
-                if (File.Exists(p))
+                foreach (var p in paths)
                 {
-                    string ext = Path.GetExtension(p).ToLowerInvariant();
-                    if (VideoExtensions.Contains(ext) || AudioExtensions.Contains(ext))
-                        foundFiles.Add(p);
+                    if (File.Exists(p))
+                    {
+                        string ext = Path.GetExtension(p).ToLowerInvariant();
+                        if (VideoExtensions.Contains(ext) || AudioExtensions.Contains(ext))
+                            foundFiles.Add(p);
+                    }
+                    else if (Directory.Exists(p))
+                    {
+                        var bag = new ConcurrentBag<string>();
+                        ScanDirectoryRecursive(p, bag);
+                        foundFiles.AddRange(bag);
+                    }
                 }
-                else if (Directory.Exists(p))
+
+                Dictionary<string, MediaItem> existingMap;
+                lock (_itemsGate)
                 {
-                    var bag = new ConcurrentBag<string>();
-                    ScanDirectoryRecursive(p, bag);
-                    foundFiles.AddRange(bag);
+                    existingMap = AllItems.ToDictionary(it => it.FilePath, StringComparer.OrdinalIgnoreCase);
+                }
+                var toAdd = new List<MediaItem>();
+
+                foreach (var file in foundFiles)
+                {
+                    if (!existingMap.ContainsKey(file))
+                    {
+                        var item = ParseMediaFile(file);
+                        if (item != null)
+                            toAdd.Add(item);
+                    }
+                }
+
+                if (toAdd.Count > 0)
+                {
+                    System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                    {
+                        lock (_itemsGate)
+                        {
+                            foreach (var it in toAdd)
+                                AllItems.Insert(0, it);
+                        }
+
+                        RebuildFolders();
+                    });
+                    SaveCache();
                 }
             }
-
-            var existingMap = AllItems.ToDictionary(it => it.FilePath, StringComparer.OrdinalIgnoreCase);
-            var toAdd = new List<MediaItem>();
-
-            foreach (var file in foundFiles)
+            catch (Exception ex)
             {
-                if (!existingMap.ContainsKey(file))
-                {
-                    var item = ParseMediaFile(file);
-                    if (item != null)
-                        toAdd.Add(item);
-                }
-            }
-
-            if (toAdd.Count > 0)
-            {
-                System.Windows.Application.Current?.Dispatcher.Invoke(() =>
-                {
-                    foreach (var it in toAdd)
-                        AllItems.Insert(0, it);
-
-                    RebuildFolders();
-                });
-                SaveCache();
+                Terminal.WriteError(ex);
             }
         });
     }
@@ -466,7 +554,11 @@ public class MxMediaLibraryEngine
 
     public void RebuildFolders()
     {
-        var groups = AllItems.GroupBy(it => it.DirectoryPath, StringComparer.OrdinalIgnoreCase).ToList();
+        List<IGrouping<string, MediaItem>> groups;
+        lock (_itemsGate)
+        {
+            groups = AllItems.GroupBy(it => it.DirectoryPath, StringComparer.OrdinalIgnoreCase).ToList();
+        }
         var folderList = new List<FolderItem>();
 
         foreach (var g in groups)
@@ -510,23 +602,32 @@ public class MxMediaLibraryEngine
     public void UpdatePlaybackProgress(string filePath, double position, double duration)
     {
         if (duration <= 0) return;
-        var item = AllItems.FirstOrDefault(it => string.Equals(it.FilePath, filePath, StringComparison.OrdinalIgnoreCase));
-        if (item != null)
+        lock (_itemsGate)
         {
-            item.LastPosition = position;
-            item.DurationSeconds = duration;
-            item.ProgressRatio = Math.Clamp(position / duration, 0.0, 1.0);
-            item.DurationString = FormatTime(duration);
-
-            // 节流写入，每 3 秒最多落盘一次，保护磁盘健康
-            if ((DateTime.Now - _lastProgressSave).TotalSeconds > 3.0)
+            var item = AllItems.FirstOrDefault(it => string.Equals(it.FilePath, filePath, StringComparison.OrdinalIgnoreCase));
+            if (item != null)
             {
-                _lastProgressSave = DateTime.Now;
-                SaveCache();
+                item.LastPosition = position;
+                item.DurationSeconds = duration;
+                item.ProgressRatio = Math.Clamp(position / duration, 0.0, 1.0);
+                item.DurationString = FormatTime(duration);
             }
         }
+
+        // 节流写入，每 3 秒最多落盘一次，保护磁盘健康
+        if ((DateTime.Now - _lastProgressSave).TotalSeconds > 3.0)
+        {
+            _lastProgressSave = DateTime.Now;
+            SaveCache();
+        }
     }
-    public long GetTotalSizeBytes() => AllItems.Sum(it => it.FileSizeBytes);
+    public long GetTotalSizeBytes()
+    {
+        lock (_itemsGate)
+        {
+            return AllItems.Sum(it => it.FileSizeBytes);
+        }
+    }
 
     private string GetOrCreateThumbnail(string videoPath)
     {
@@ -713,6 +814,20 @@ internal static class WindowsThumbnailProvider
         [FieldOffset(0)] public ushort vt;
         [FieldOffset(8)] public ulong uhVal;
         [FieldOffset(8)] public uint ulVal;
+        [FieldOffset(8)] public IntPtr pwszVal;
+    }
+
+    /// <summary>防御性清理：若属性存储返回了字符串型变体，释放其非托管内存防泄漏</summary>
+    private static void ClearPropVariant(PropVariant pv)
+    {
+        const ushort VT_LPWSTR = 31;
+        const ushort VT_BSTR = 8;
+        if (pv.vt == VT_LPWSTR || pv.vt == VT_BSTR)
+        {
+            try { if (pv.pwszVal != IntPtr.Zero) Marshal.FreeCoTaskMem(pv.pwszVal); } catch { }
+            pv.vt = 0;
+            pv.pwszVal = IntPtr.Zero;
+        }
     }
 
     public static (double DurationSec, string Resolution) GetMediaDetails(string filePath)
@@ -729,6 +844,7 @@ internal static class WindowsThumbnailProvider
                 PropVariant pvDur = new PropVariant();
                 store.GetValue(ref kDur, pvDur);
                 double duration = (pvDur.uhVal > 0) ? ((double)pvDur.uhVal / 10000000.0) : 0;
+                ClearPropVariant(pvDur);
 
                 // PKEY_Video_FrameWidth / Height
                 PropertyKey kWidth = new PropertyKey(new Guid("64440491-4c8b-11d1-8b70-080036b11a03"), 3);
@@ -741,6 +857,8 @@ internal static class WindowsThumbnailProvider
 
                 uint width = pvW.ulVal;
                 uint height = pvH.ulVal;
+                ClearPropVariant(pvW);
+                ClearPropVariant(pvH);
 
                 string res = "";
                 if (width >= 3800 || height >= 2100) res = "4K";

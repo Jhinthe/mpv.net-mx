@@ -22,7 +22,12 @@ public class ThumbnailImageConverter : IValueConverter
         if (value is not string path || string.IsNullOrWhiteSpace(path) || !File.Exists(path))
             return null;
 
-        if (_cache.TryGetValue(path, out var weakRef) && weakRef.TryGetTarget(out var cachedBmp))
+        // 缓存键包含文件修改时间：文件更新后自动失效，杜绝陈旧封面
+        long stamp = 0;
+        try { stamp = File.GetLastWriteTimeUtc(path).Ticks; } catch { }
+        string cacheKey = $"{path}|{stamp}";
+
+        if (_cache.TryGetValue(cacheKey, out var weakRef) && weakRef.TryGetTarget(out var cachedBmp))
         {
             return cachedBmp;
         }
@@ -34,7 +39,7 @@ public class ThumbnailImageConverter : IValueConverter
             bmp.UriSource = new Uri(path);
             bmp.CacheOption = BitmapCacheOption.OnLoad;
             bmp.CreateOptions = BitmapCreateOptions.IgnoreColorProfile | BitmapCreateOptions.DelayCreation;
-            
+
             // 按卡片实际需要的显示像素约束解码尺寸（避免原图全分辨率解码导致内存暴涨）
             int decodeWidth = 320;
             if (parameter is string paramStr && int.TryParse(paramStr, out int customWidth))
@@ -45,7 +50,7 @@ public class ThumbnailImageConverter : IValueConverter
             bmp.EndInit();
             bmp.Freeze(); // 跨线程只读安全并提升 WPF 渲染管线合成速度
 
-            _cache[path] = new WeakReference<BitmapSource>(bmp);
+            _cache[cacheKey] = new WeakReference<BitmapSource>(bmp);
             return bmp;
         }
         catch

@@ -157,10 +157,24 @@ public static class MxAiSubtitleAssistant
             Word = clean,
             Phonetic = $"/{clean.ToLowerInvariant()}/",
             Pos = "word",
-            Meaning = "词汇（点击查词深入学习）"
+            Meaning = "生词（点击卡片可复制）"
         };
         _dictCache[clean] = fallback;
         return fallback;
+    }
+
+    /// <summary>判断文本是否以中日韩字符为主（≥30% 有效字符）</summary>
+    private static bool ContainsCjk(string text)
+    {
+        int cjk = 0, total = 0;
+        foreach (char c in text)
+        {
+            if (char.IsWhiteSpace(c) || char.IsPunctuation(c)) continue;
+            total++;
+            if (c is >= (char)0x4E00 and <= (char)0x9FFF or >= (char)0x3040 and <= (char)0x30FF or >= (char)0xAC00 and <= (char)0xD7AF)
+                cjk++;
+        }
+        return total > 0 && cjk * 100 / total >= 30;
     }
 
     /// <summary>
@@ -169,6 +183,9 @@ public static class MxAiSubtitleAssistant
     public static async Task<string> TranslateSentenceAsync(string originalText)
     {
         if (string.IsNullOrWhiteSpace(originalText)) return "";
+
+        // 中文原文无需英→中翻译，直接返回（避免 MyMemory 对 CJK 输入返回乱码/原样）
+        if (ContainsCjk(originalText)) return originalText;
 
         if (_translationCache.TryGetValue(originalText, out var cached))
             return cached;

@@ -31,6 +31,12 @@ static class Program
 AppDomain.CurrentDomain.UnhandledException += (sender, e) => {
     WriteCrashDetails(e.ExceptionObject.ToString() ?? "unknown exception");
 };
+System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (sender, e) => {
+    // 全局兜底：所有 fire-and-forget 任务异常不再无观察漂移
+    e.SetObserved();
+    WriteCrashDetails("UnobservedTaskException: " + e.Exception);
+    Terminal.WriteError(e.Exception);
+};
 
             if (App.IsTerminalAttached)
 

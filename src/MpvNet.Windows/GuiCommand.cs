@@ -33,7 +33,7 @@ public class GuiCommand
 
     public Dictionary<string, Action<IList<string>>> Commands => _commands ??= new()
     {
-                        ["mx-show-media-library"] = args => { if (MainForm.Instance != null) MainForm.Instance.ShowMediaLibrary(); else ShowDialog(typeof(MediaLibraryWindow)); },
+                        ["mx-show-media-library"] = args => { if (MainForm.Instance != null) MainForm.Instance.ShowMediaLibrary(); else MediaLibraryWindow.ShowInstance(); },
         ["mx-toggle-ai-subtitle"] = args => AiSubtitleWindow.ToggleInstance(),
         ["mx-toggle-dual-sub"] = args => MxSubtitleSuite.ToggleDualSubtitles(),
         ["mx-search-shooter-sub"] = args => System.Threading.Tasks.Task.Run(() => MxSubtitleSuite.SearchAndMountShooterSubtitlesAsync(Player.Path)),
@@ -348,8 +348,7 @@ public class GuiCommand
 
         if (path.Contains("://"))
         {
-            if (path.Contains("://"))
-                path = Player.GetPropertyString("media-title");
+            path = Player.GetPropertyString("media-title");
             string videoFormat = Player.GetPropertyString("video-format").ToUpper();
             string audioCodec = Player.GetPropertyString("audio-codec-name").ToUpper();
             int width = Player.GetPropertyInt("video-params/w");
