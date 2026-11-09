@@ -95,6 +95,7 @@ public partial class MediaLibraryWindow : Window
         _searchDebounceTimer.Tick += (s, e) =>
         {
             _searchDebounceTimer.Stop();
+            if (!IsVisible) return; // 窗口隐藏时空转防护
             RefreshViews();
         };
 

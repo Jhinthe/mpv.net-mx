@@ -171,17 +171,38 @@ public class MxMediaLibraryEngine
 
             if (items is { Count: > 0 })
             {
+                // 离线盘（如外置 G:）条目保留：盘回归后续播进度不丢失；仅清理"盘在线但文件已删"的条目
+                var rootOnline = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+                bool ExistsOrDriveOffline(string path)
+                {
+                    string root = Path.GetPathRoot(path) ?? "";
+                    if (!rootOnline.TryGetValue(root, out bool online))
+                    {
+                        try
+                        {
+                            var drv = new DriveInfo(root);
+                            online = drv.IsReady && Directory.Exists(root);
+                        }
+                        catch { online = false; }
+                        rootOnline[root] = online;
+                    }
+                    if (!online) return true;
+                    return File.Exists(path) && !IsJunkMedia(path);
+                }
+
                 lock (_itemsGate)
                 {
                     AllItems.Clear();
                     foreach (var it in items)
                     {
-                        if (File.Exists(it.FilePath) && !IsJunkMedia(it.FilePath))
+                        if (ExistsOrDriveOffline(it.FilePath))
+                        {
                             if (it.DurationSeconds > 0 && (string.IsNullOrEmpty(it.DurationString) || it.DurationString == "--:--"))
                             {
                                 it.DurationString = FormatTime(it.DurationSeconds);
                             }
                             AllItems.Add(it);
+                        }
                     }
                 }
                 RebuildFolders();
@@ -543,6 +564,16 @@ public class MxMediaLibraryEngine
                 string thumbPath = GetOrCreateThumbnail(fi.FullName);
                 item.ThumbnailPath = thumbPath;
             }
+            else
+            {
+                // 音频同样提取真实时长（Shell 属性对 mp3/flac 等同样有效），时长排序不再失效
+                var (dur, _) = WindowsThumbnailProvider.GetMediaDetails(fi.FullName);
+                if (dur > 0)
+                {
+                    item.DurationSeconds = dur;
+                    item.DurationString = FormatTime(dur);
+                }
+            }
 
             return item;
         }
@@ -633,7 +664,7 @@ public class MxMediaLibraryEngine
     {
         try
         {
-            string hash = ComputeMd5(videoPath);
+            string hash = ComputeCacheHash(videoPath);
             string cachePath = Path.Combine(ThumbnailsDir, $"{hash}.jpg");
 
             if (File.Exists(cachePath) && new FileInfo(cachePath).Length > 0)
@@ -651,11 +682,11 @@ public class MxMediaLibraryEngine
         return "";
     }
 
-    private static string ComputeMd5(string input)
+    private static string ComputeCacheHash(string input)
     {
-        using var md5 = MD5.Create();
-        byte[] bytes = md5.ComputeHash(Encoding.UTF8.GetBytes(input.ToLowerInvariant()));
-        return BitConverter.ToString(bytes).Replace("-", "").ToLowerInvariant();
+        // SHA256（静态 HashData，FIPS 策略机器同样可用）；旧 MD5 命名的缩略图保持共存，仅新条目用新命名
+        byte[] hash = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(input.ToLowerInvariant()));
+        return Convert.ToHexString(hash).ToLowerInvariant();
     }
 
     public static string FormatFileSize(long bytes)
@@ -664,7 +695,9 @@ public class MxMediaLibraryEngine
             return $"{(bytes / (1024.0 * 1024 * 1024)):F1} GB";
         if (bytes >= 1024L * 1024)
             return $"{(bytes / (1024.0 * 1024)):F1} MB";
-        return $"{(bytes / 1024.0):F0} KB";
+        if (bytes >= 1024)
+            return $"{(bytes / 1024.0):F0} KB";
+        return $"{bytes} B";
     }
 
     public static string FormatTime(double seconds)
