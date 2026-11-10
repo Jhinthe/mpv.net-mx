@@ -301,31 +301,12 @@ public partial class MediaLibraryWindow : Window
             if (isGridView)
             {
                 ItemsVideosList.ItemsSource = null;
-                if (videos.Count > 36)
-                {
-                    // 先加载首屏 36 张卡片 (0.05 秒瞬开直出！)，彻底消灭白屏与未响应
-                    var initialBatch = new System.Collections.ObjectModel.ObservableCollection<MediaItem>(videos.Take(36));
-                    ItemsVideosGrid.ItemsSource = initialBatch;
-
-                    Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(() =>
-                    {
-                        // 期间若列表已被再次刷新，旧批次成为孤儿集合，直接放弃补载
-                        if (!ReferenceEquals(ItemsVideosGrid.ItemsSource, initialBatch)) return;
-                        for (int k = 36; k < videos.Count; k++)
-                        {
-                            initialBatch.Add(videos[k]);
-                        }
-                    }));
-                }
-                else
-                {
-                    ItemsVideosGrid.ItemsSource = videos;
-                }
+                StartChunkedFill(ItemsVideosGrid, videos);
             }
             else
             {
                 ItemsVideosGrid.ItemsSource = null;
-                ItemsVideosList.ItemsSource = videos;
+                StartChunkedFill(ItemsVideosList, videos);
             }
         }
         else
@@ -350,6 +331,36 @@ public partial class MediaLibraryWindow : Window
 
         UpdateVisibility();
         UpdateViewHeading();
+    }
+
+    /// <summary>
+    /// 首屏 36 张瞬开直出，其余逐卡以 Background 优先级补载。
+    /// 每张卡片之间让 UI 线程泵消息——若在单次回调内巨量 Add，会霸占 UI 线程数秒
+    /// （历史上 quit 的 BeginInvoke(Close) 因此排队 5.3 秒才被执行）。
+    /// </summary>
+    private void StartChunkedFill(System.Windows.Controls.ItemsControl target, List<MediaItem> source)
+    {
+        if (source.Count <= 36)
+        {
+            target.ItemsSource = source;
+            return;
+        }
+
+        var batch = new System.Collections.ObjectModel.ObservableCollection<MediaItem>(source.Take(36));
+        target.ItemsSource = batch;
+
+        void AppendNext(int index)
+        {
+            // 期间若列表已被再次刷新，旧批次成为孤儿集合，直接放弃补载
+            if (!ReferenceEquals(target.ItemsSource, batch)) return;
+            if (index >= source.Count) return;
+            batch.Add(source[index]);
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background,
+                new Action(() => AppendNext(index + 1)));
+        }
+
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background,
+            new Action(() => AppendNext(36)));
     }
 
     private List<MediaItem> SortMediaItems(List<MediaItem> items)

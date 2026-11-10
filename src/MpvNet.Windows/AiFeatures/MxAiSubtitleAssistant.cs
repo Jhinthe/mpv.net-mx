@@ -194,7 +194,7 @@ public static class MxAiSubtitleAssistant
         {
             string encoded = Uri.EscapeDataString(originalText);
             string url = $"https://api.mymemory.translated.net/get?q={encoded}&langpair=en|zh-CN";
-            
+
             using var response = await _httpClient.GetAsync(url);
             if (response.IsSuccessStatusCode)
             {
@@ -214,7 +214,51 @@ public static class MxAiSubtitleAssistant
         }
         catch {}
 
+        // MyMemory 失败/配额耗尽 → Google gtx 无密钥兜底
+        string? alt = await TryGoogleTranslateAsync(originalText);
+        if (alt != null)
+        {
+            _translationCache[originalText] = alt;
+            return alt;
+        }
+
         return originalText;
+    }
+
+    /// <summary>无密钥 Google translate_a 兜底（client=gtx，解析 [["译文","原文"],...] 数组）</summary>
+    private static async Task<string?> TryGoogleTranslateAsync(string text)
+    {
+        try
+        {
+            string encoded = Uri.EscapeDataString(text);
+            string url = $"https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-CN&dt=t&q={encoded}";
+
+            using var resp = await _httpClient.GetAsync(url);
+            if (!resp.IsSuccessStatusCode) return null;
+
+            string json = await resp.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array || doc.RootElement.GetArrayLength() == 0)
+                return null;
+            var first = doc.RootElement[0];
+            if (first.ValueKind != JsonValueKind.Array) return null;
+
+            var sb = new StringBuilder();
+            foreach (var seg in first.EnumerateArray())
+            {
+                if (seg.ValueKind == JsonValueKind.Array && seg.GetArrayLength() > 0 &&
+                    seg[0].ValueKind == JsonValueKind.String)
+                {
+                    sb.Append(seg[0].GetString());
+                }
+            }
+            string result = sb.ToString();
+            return string.IsNullOrWhiteSpace(result) ? null : result;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     /// <summary>

@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -30,6 +33,14 @@ public static class MxWebRemoteServer
 
     /// <summary>本次运行的访问密钥（防止局域网内任意设备未授权操控）</summary>
     public static int AccessKey { get; private set; }
+
+    /// <summary>本次运行是否已启用 HTTPS（true 时二维码与显示地址均为 https）</summary>
+    public static bool HttpsActive { get; private set; }
+
+    private const string SslAppId = "{7A3C2F91-6B4D-4E28-9F55-1C0A88D2E3B4}";
+    private static string CertPath => Path.Combine(Player.ConfigFolder, "remote_https.pfx");
+    private static string EnabledFlagPath => Path.Combine(Player.ConfigFolder, "remote_https_enabled.flag");
+    private static string DeclinedFlagPath => Path.Combine(Player.ConfigFolder, "remote_https_declined.flag");
 
     public static bool IsRunning => _isRunning;
 
@@ -91,7 +102,8 @@ public static class MxWebRemoteServer
 
     public static string GetServerUrl()
     {
-        return $"http://{GetPrimaryLocalIp()}:{Port}/?k={AccessKey.ToString(CultureInfo.InvariantCulture)}";
+        string scheme = HttpsActive ? "https" : "http";
+        return $"{scheme}://{GetPrimaryLocalIp()}:{Port}/?k={AccessKey.ToString(CultureInfo.InvariantCulture)}";
     }
 
     public static void StartServer()
@@ -100,36 +112,59 @@ public static class MxWebRemoteServer
 
         AccessKey = Random.Shared.Next(100000, 999999);
         _cts = new CancellationTokenSource();
-        _listener = new HttpListener();
+
+        bool wantHttps = ResolveHttpsMode();
         bool anyBound = false;
 
-        try
+        if (wantHttps)
         {
-            _listener.Prefixes.Add($"http://*:{Port}/");
-            _listener.Start();
-            anyBound = true;
-        }
-        catch (Exception)
-        {
-            // 若 http://*:8999/ 需要特权，自动降级为 localhost 与本机网卡 IP
             try
             {
-                _listener?.Close();
                 _listener = new HttpListener();
-                _listener.Prefixes.Add($"http://localhost:{Port}/");
-                _listener.Prefixes.Add($"http://127.0.0.1:{Port}/");
-                string localIp = GetPrimaryLocalIp();
-                if (localIp != "127.0.0.1")
-                {
-                    try { _listener.Prefixes.Add($"http://{localIp}:{Port}/"); } catch { }
-                }
+                _listener.Prefixes.Add($"https://+:{Port}/");
+                _listener.Start();
+                HttpsActive = true;
+                anyBound = true;
+            }
+            catch (Exception ex)
+            {
+                Terminal.WriteError(ex);
+                anyBound = false;
+            }
+        }
+
+        if (!anyBound)
+        {
+            HttpsActive = false;
+            _listener = new HttpListener();
+            try
+            {
+                _listener.Prefixes.Add($"http://*:{Port}/");
                 _listener.Start();
                 anyBound = true;
             }
-            catch (Exception ex2)
+            catch (Exception)
             {
-                Terminal.WriteError(ex2);
-                anyBound = false;
+                // 若 http://*:8999/ 需要特权，自动降级为 localhost 与本机网卡 IP
+                try
+                {
+                    _listener?.Close();
+                    _listener = new HttpListener();
+                    _listener.Prefixes.Add($"http://localhost:{Port}/");
+                    _listener.Prefixes.Add($"http://127.0.0.1:{Port}/");
+                    string localIp = GetPrimaryLocalIp();
+                    if (localIp != "127.0.0.1")
+                    {
+                        try { _listener.Prefixes.Add($"http://{localIp}:{Port}/"); } catch { }
+                    }
+                    _listener.Start();
+                    anyBound = true;
+                }
+                catch (Exception ex2)
+                {
+                    Terminal.WriteError(ex2);
+                    anyBound = false;
+                }
             }
         }
 
@@ -141,6 +176,136 @@ public static class MxWebRemoteServer
         else
         {
             _isRunning = false;
+        }
+    }
+
+    /// <summary>
+    /// 决定是否走 HTTPS：证书 + sslcert 绑定均就绪 → 直接启用；
+    /// 用户已同意（flag）但绑定缺失 → 静默补部署（触发一次 UAC）；
+    /// 从未询问 → 弹一次征询（拒绝则永久记住）。
+    /// </summary>
+    private static bool ResolveHttpsMode()
+    {
+        try
+        {
+            bool certExists = File.Exists(CertPath);
+            string? thumb = null;
+            if (certExists)
+            {
+                using var c = new X509Certificate2(CertPath);
+                thumb = c.Thumbprint;
+            }
+
+            bool bindingExists = SslBindingExists(thumb);
+            if (bindingExists && certExists)
+                return true;
+
+            if (File.Exists(EnabledFlagPath))
+                return TryProvision();
+
+            if (File.Exists(DeclinedFlagPath) || bindingExists)
+                return false;
+
+            var choice = MpvNet.Windows.WPF.Msg.ShowQuestion(MxI18n.T("RemoteHttpsAsk"));
+            if (choice == System.Windows.MessageBoxResult.OK)
+            {
+                File.WriteAllText(EnabledFlagPath, DateTime.UtcNow.ToString("o"));
+                return TryProvision();
+            }
+            try { File.WriteAllText(DeclinedFlagPath, DateTime.UtcNow.ToString("o")); } catch { }
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool TryProvision()
+    {
+        try
+        {
+            string thumb = LoadOrCreateCertificate();
+            string ps = Path.Combine(Path.GetTempPath(), "mpvnet_https_setup.ps1");
+            string script = """
+                $ErrorActionPreference = 'Stop'
+                Import-PfxCertificate -FilePath '__CERT__' -CertStoreLocation Cert:\LocalMachine\My | Out-Null
+                netsh http delete sslcert ipport=0.0.0.0:__PORT__ 2>$null | Out-Null
+                netsh http add sslcert ipport=0.0.0.0:__PORT__ certhash=__THUMB__ appid='__APPID__' | Out-Null
+                $check = netsh http show sslcert ipport=0.0.0.0:__PORT__
+                if ("$check" -notmatch 'Certificate Hash|证书哈希') { exit 1 }
+                """;
+            script = script.Replace("__CERT__", CertPath)
+                           .Replace("__PORT__", Port.ToString(CultureInfo.InvariantCulture))
+                           .Replace("__THUMB__", thumb)
+                           .Replace("__APPID__", SslAppId);
+            File.WriteAllText(ps, script);
+
+            var psi = new ProcessStartInfo("powershell",
+                $"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{ps}\"")
+            {
+                Verb = "runas",
+                UseShellExecute = true,
+                WindowStyle = ProcessWindowStyle.Hidden
+            };
+            using var proc = Process.Start(psi);
+            proc?.WaitForExit(20000);
+
+            return SslBindingExists(thumb);
+        }
+        catch (Exception ex)
+        {
+            Terminal.WriteError(ex);
+            return false;
+        }
+    }
+
+    private static string LoadOrCreateCertificate()
+    {
+        if (File.Exists(CertPath))
+        {
+            using var existing = new X509Certificate2(CertPath);
+            return existing.Thumbprint;
+        }
+
+        var rsa = RSA.Create(2048);
+        var req = new CertificateRequest("CN=mpvnet-mx-remote", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        req.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
+        req.CertificateExtensions.Add(new X509KeyUsageExtension(
+            X509KeyUsageFlags.KeyEncipherment | X509KeyUsageFlags.DigitalSignature, true));
+
+        using var cert = req.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(10));
+        File.WriteAllBytes(CertPath, cert.Export(X509ContentType.Pfx));
+
+        using var reloaded = new X509Certificate2(CertPath);
+        return reloaded.Thumbprint;
+    }
+
+    /// <summary>
+    /// 检测 http.sys 是否已绑定本应用的 sslcert。
+    /// 判据优先用证书指纹（纯 ASCII，不受 netsh 输出编码影响——GUI 父进程重定向解码
+    /// 未必能正确还原中文标签"证书哈希"，曾导致 https 被误判为未部署而回退 http）。
+    /// </summary>
+    private static bool SslBindingExists(string? thumb = null)
+    {
+        try
+        {
+            var psi = new ProcessStartInfo("netsh", $"http show sslcert ipport=0.0.0.0:{Port}")
+            {
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                CreateNoWindow = true
+            };
+            using var p = Process.Start(psi);
+            string output = p.StandardOutput.ReadToEnd();
+            p.WaitForExit(5000);
+            string lowered = output.ToLowerInvariant();
+            return (!string.IsNullOrEmpty(thumb) && lowered.Contains(thumb.ToLowerInvariant()))
+                || lowered.Contains("certificate hash");
+        }
+        catch
+        {
+            return false;
         }
     }
 

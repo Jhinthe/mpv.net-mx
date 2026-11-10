@@ -79,6 +79,8 @@ public static class MxI18n
         ["OsdCopied"] = ("📋  已复制遥控网址到剪贴板", "📋  Remote URL copied to clipboard"),
         ["AddFolderDesc"] = ("选择要加入 MX 媒体库的影视或音乐文件夹", "Pick a movie or music folder for the MX library"),
         ["CopyFailed"] = ("⚠  剪贴板被占用，复制失败", "⚠  Clipboard busy, copy failed"),
+        ["RemoteHttpsAsk"] = ("是否为手机无线遥控启用 HTTPS 加密？\n\n需要一次管理员授权以安装本地自签名证书（手机浏览器首次访问会提示不受信任，继续即可）。\n选择\"否\"将继续使用 HTTP + 访问密钥模式。",
+            "Enable HTTPS for the phone remote?\n\nNeeds one admin approval to install a local self-signed certificate (the phone browser will warn once - just proceed).\nChoose \"No\" to keep HTTP + access-key mode."),
         ["OsdSubScale"] = ("🔤  字幕字号: {0}%", "🔤  Subtitle Font Size: {0}%"),
         ["OsdSubPos"] = ("↕  字幕垂直位置: {0}%", "↕  Subtitle Vertical Position: {0}%"),
         ["OsdSubDelay"] = ("⏱  字幕时间轴校准: {0}{1:F1}s", "⏱  Subtitle Sync Calibration: {0}{1:F1}s")

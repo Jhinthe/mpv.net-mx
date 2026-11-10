@@ -343,7 +343,14 @@ public class MainPlayer : MpvClient
     {
         while (true)
         {
-            mpv_wait_event(MainHandle, -1);
+            IntPtr ptr = mpv_wait_event(MainHandle, -1);
+            mpv_event evt = (mpv_event)Marshal.PtrToStructure(ptr, typeof(mpv_event))!;
+
+            // 核心退出后 mpv_wait_event 会无限次立即返回 SHUTDOWN：
+            // 原先的无条件自旋会 100% 占用该句柄内部锁，令 OnFormClosing 中的
+            // mpv_destroy(MainHandle) 阻塞约 2 秒。收到 SHUTDOWN 必须立即退出线程。
+            if (evt.event_id == mpv_event_id.MPV_EVENT_SHUTDOWN)
+                return;
         }
     }
 
